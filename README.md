@@ -1,4 +1,4 @@
-# neuron-steer
+# Living Library
 
 A local lab for pushing **one or many** MLP neurons in Qwen3-8B and asking it
 "Who are you?" (or anything else). It reproduces the single-neuron method of the
