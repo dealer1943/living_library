@@ -4,3 +4,12 @@ __pycache__/
 # librarian catalogue data (schema lives in src/neuron_steer/library.py)
 library/*.db
 library/*.db-*
+
+# local run logs (a couple of example logs are tracked on purpose)
+runs/*.log
+# model weights / caches
+*.safetensors
+*.gguf
+*.bin
+.cache/
+.DS_Store
