@@ -6,7 +6,7 @@ MVP announcement. "Verified" is stamped `YYYY-MM-DD HH:MM America/New_York` with
 
 | # | feature | state | verified |
 |---|---|---|---|
-| [F00001](F00001_command_color_coding.md) | Color-coded commands and parameters | Planned | pending |
+| [F00001](F00001_command_color_coding.md) | Color-coded commands and parameters | Verified | 2026-10-28 13:57 |
 | [F00002](F00002_slash_command_menu.md) | Slash menu with filtering and autocomplete | Planned | pending |
 | [F00003](F00003_checkout_checkin_neurons.md) | Check out / check in neurons (five keywords) | Planned | pending |
 | [F00004](F00004_persona_side_tabs.md) | A side tab for each persona | Planned | pending |

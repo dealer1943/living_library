@@ -2,10 +2,10 @@
 
 | Field | Value |
 |-------|-------|
-| State | Planned |
+| State | Verified (pre-MVP) |
 | Stage | pre-MVP |
 | Created | 2026-10-28 |
-| Verified | pending |
+| Verified | 2026-10-28 13:57 America/New_York — headless Chrome (Playwright): typed '/probe 12:545 --alpha 0.5 --prompt "…"' → overlay spans cmd/neuron/flag/num/str; /help bubble + hint + prose reply tokens colored, ordinary prose plain; '<img …>' escaped; no page errors |
 | Owner | arcane dealer + Grok Bot |
 | Class | ux |
 | Lineage | Owner brief 2026-10-28, item 1 ("color code any commands or parameters so they stand out from text") |
@@ -43,13 +43,14 @@ One tokenizer (`highlight(text, {cmd})`) emits escaped HTML spans:
 Type `/probe 12:545 --alpha 0.5` → `/probe` gold, `12:545` teal, `--alpha` violet, `0.5` orange, live.
 
 ## Acceptance / Verification
-- [ ] Typing a command in the box colors it live; caret position and wrapping line up with the text.
-- [ ] Sent command bubbles, system output, `/help`, hint bar are colored.
-- [ ] A reply that mentions `/probe 12:545:up` shows it colored; ordinary prose is untouched.
-- [ ] No HTML injection (text is escaped before spans are added).
+- [x] Typing a command in the box colors it live; caret position and wrapping line up with the text.
+- [x] Sent command bubbles, system output, `/help`, hint bar are colored.
+- [x] A reply that mentions `/probe 12:545:up` shows it colored; ordinary prose is untouched.
+- [x] No HTML injection (text is escaped before spans are added).
 
 ## Open questions / follow-ups
 - Color-blind-safe palette as a skin variant.
 
 ## Status log
 - 2026-10-28 — created from the owner's brief.
+- 2026-10-28 13:57 — implemented and verified: headless Chrome (Playwright): typed '/probe 12:545 --alpha 0.5 --prompt "…"' → overlay spans cmd/neuron/flag/num/str; /help bubble + hint + prose reply tokens colored, ordinary prose plain; '<img …>' escaped; no page errors

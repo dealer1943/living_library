@@ -11,6 +11,9 @@
     --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
     --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
     --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+    /* F00001 token colors (per skin) */
+    --tok-cmd: #f0b95a; --tok-flag: #c99cf0; --tok-neuron: #56d4bf; --tok-num: #f59a76; --tok-str: #a9d98f; --tok-dir: #8fb6ff;
+    --tok-bg: rgba(255,255,255,.06); --cmd-bg: #101c2a;
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; }
@@ -36,7 +39,13 @@
   .msg.user .body { flex: 0 1 auto; max-width: 78%; display: flex; flex-direction: column; align-items: flex-end; }
   .msg.user .who, .msg.user .meta { text-align: right; }
   .msg.user .text { background: var(--you); color: var(--you-ink); padding: 9px 14px; border-radius: 18px 18px 4px 18px; }
-  .msg.user.cmd .text { font: 14px/1.5 var(--mono); }
+  .msg.user.cmd .text { font: 14px/1.5 var(--mono); background: var(--cmd-bg); border: 1px solid var(--you); color: var(--ink); }
+  /* F00001: commands / flags / neuron specs / values stand out from prose */
+  .tok-cmd { color: var(--tok-cmd); font-weight: 600; } .tok-flag { color: var(--tok-flag); } .tok-neuron { color: var(--tok-neuron); }
+  .tok-num { color: var(--tok-num); } .tok-str { color: var(--tok-str); } .tok-dir { color: var(--tok-dir); }
+  .prose .tok { font-family: var(--mono); font-size: .86em; background: var(--tok-bg); border-radius: 5px; padding: 1px 5px; }
+  .msg.system .tok, .msg.user.cmd .tok { font: inherit; background: none; padding: 0; }
+  .hint .tok-cmd, .empty .tok-cmd { font-weight: 600; }
   .msg.assistant .body { flex: 0 1 auto; max-width: 85%; }
   .msg.assistant .text { background: var(--her); border: 1px solid var(--line); padding: 9px 14px; border-radius: 18px 18px 18px 4px; }
   .msg.assistant .text:empty:not(.cursor) { display: none; }
@@ -68,8 +77,18 @@
   .empty code { font-family: var(--mono); font-size: 13px; color: var(--accent); }
   footer { border-top: 1px solid var(--line); background: var(--panel); }
   form { max-width: 820px; margin: 0 auto; padding: 14px 20px 18px; display: flex; gap: 10px; align-items: flex-end; }
-  textarea { flex: 1; resize: none; max-height: 200px; min-height: 46px; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 12px; padding: 11px 14px; font: 16px/1.4 var(--sans); outline: none; }
+  .compose { position: relative; flex: 1; display: flex; background: var(--bg); border-radius: 12px; }
+  textarea, #hl { font: 16px/1.4 var(--sans); padding: 11px 14px; border: 1px solid var(--line); border-radius: 12px; letter-spacing: normal;
+    white-space: pre-wrap; overflow-wrap: break-word; word-break: normal; tab-size: 4; }
+  textarea { position: relative; z-index: 1; flex: 1; resize: none; max-height: 200px; min-height: 46px; background: transparent;
+    color: transparent; caret-color: var(--ink); outline: none; scrollbar-width: none; }
+  textarea::-webkit-scrollbar { display: none; }
+  textarea::placeholder { color: var(--muted); }
+  textarea::selection { background: color-mix(in srgb, var(--accent) 35%, transparent); color: transparent; }
   textarea:focus { border-color: var(--accent); }
+  /* mirrored, colored copy of the input behind the transparent textarea: typing stays native, text shows colored */
+  #hl { position: absolute; inset: 0; margin: 0; color: var(--ink); border-color: transparent; overflow: hidden; pointer-events: none; }
+  #hl .tok-cmd { font-weight: inherit; }
   #send { background: var(--accent); color: #1b150c; border: none; font-weight: 600; height: 46px; padding: 0 18px; border-radius: 12px; }
   .hint { max-width: 820px; margin: -10px auto 0; padding: 0 20px 10px; font-size: 12px; color: var(--muted); }
 </style>
@@ -87,13 +106,55 @@
 <main id="scroll"><div id="log"></div></main>
 <footer>
   <form id="form">
-    <textarea id="input" rows="1" placeholder="Ask the Librarian… (Enter sends · Shift+Enter new line)" autofocus></textarea>
+    <div class="compose"><div id="hl" aria-hidden="true"></div><textarea id="input" rows="1" spellcheck="false" placeholder="Ask the Librarian…  ( / for commands · Enter sends · Shift+Enter new line )" autofocus></textarea></div>
     <button id="send" type="submit">Send</button>
   </form>
-  <div class="hint">Enter to send · Shift+Enter for a new line · <code>/find</code> <code>/inventory</code> <code>/probe L:N[:up|down] [--alpha X] [--prompt "Q"]</code> <code>/help</code></div>
+  <div class="hint" id="hint" data-hl>Enter to send · Shift+Enter for a new line · /find /inventory /probe L:N[:up|down] --alpha X --prompt "Q" · /help</div>
 </footer>
 <script>
 const $ = (id) => document.getElementById(id);
+
+// ---------------------------------------------------------------- F00001: color-coded commands
+const KNOWN_CMDS = new Set(["help", "find", "lookup", "show", "open", "recent", "inventory", "inv", "probe", "reset"]);
+const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+// token classes, most specific first; "cmd" mode = a command line (everything colored), else prose (only
+// commands, flags and neuron specs, so ordinary numbers and quotes in a reply stay plain)
+const TOK_RULES = [
+  ["str", /"[^"\n]*"?|\u201c[^\u201d\n]*\u201d?|'[^'\n]*'/y, true],
+  ["cmd", /\/[a-z][a-z-]*!?(?![\w\/])/iy, false],
+  ["flag", /--[a-z][\w-]*|(?:alpha|prompt|\u03b1)(?==)/iy, false],
+  ["flag", /-[ap](?=[\s=]|$)/y, true],
+  ["neuron", /L?\d{1,2}:N?\d{1,5}(?::(?:up|down|u|d|[+-]?\d*\.?\d+))*(?![\w.])|L\d{1,2}[ :]N\d{1,5}(?:\s+(?:up|down)\b)?|L:N(?:\[[^\]\s]*\])?/iy, false],
+  ["neuron", /\d{1,2},\d{1,5}(?:,[+-]?\d*\.?\d+|,(?:up|down))?(?![\w.])/y, true],
+  ["dir", /(?:up|down|both)(?![\w])/iy, true],
+  ["num", /[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?![\w.])/y, true],
+];
+function highlight(text, cmdMode) {
+  text = String(text ?? "");
+  let out = "", plain = "", i = 0;
+  const flush = () => { out += esc(plain); plain = ""; };
+  while (i < text.length) {
+    const prev = i ? text[i - 1] : " ";
+    let hit = null;
+    if (!/[\w\/.\-]/.test(prev) || (text[i] === "\u03b1")) {      // tokens start at a word boundary
+      for (const [cls, re, cmdOnly] of TOK_RULES) {
+        if (cmdOnly && !cmdMode) continue;
+        re.lastIndex = i;
+        const m = re.exec(text);
+        if (!m || !m[0]) continue;
+        if (cls === "cmd" && !(cmdMode && i === 0) && !KNOWN_CMDS.has(m[0].slice(1).replace(/!$/, "").toLowerCase())) continue;
+        hit = [cls, m[0]]; break;
+      }
+    }
+    if (hit) { flush(); out += `<span class="tok tok-${hit[0]}">${esc(hit[1])}</span>`; i += hit[1].length; }
+    else { plain += text[i++]; }
+  }
+  flush();
+  return out;
+}
+const isCmdLine = (t) => /^\s*\//.test(t);
+function paint(el, text, cmdMode) { el.innerHTML = highlight(text, cmdMode); el.classList.add("prose"); }
+
 const log = $("log"), scroller = $("scroll"), input = $("input"), sendBtn = $("send");
 const KEY = "librarian-chat-v1";
 let state = JSON.parse(localStorage.getItem(KEY) || "null") || { session_id: null, messages: [] };
@@ -126,7 +187,7 @@ function bubble(role, text, meta, thoughts, label, isCmd) {
   el.innerHTML = `<div class="avatar"></div><div class="body"><div class="who"></div>${think}<div class="text"></div><div class="meta"></div></div>`;
   el.querySelector(".avatar").textContent = role === "user" ? "Y" : role === "assistant" ? "L" : "§";
   el.querySelector(".who").textContent = name;
-  el.querySelector(".text").textContent = text;
+  paint(el.querySelector(".text"), text, !!isCmd);
   el.querySelector(".meta").textContent = meta || "";
   if (role === "error") el.classList.add("system");
   if (isCmd) el.classList.add("cmd");
@@ -139,7 +200,7 @@ function renderAll() {
   log.innerHTML = "";
   if (!state.messages.length) {
     log.innerHTML = `<div class="empty"><h2>Welcome to the Library.</h2>
-      <p>The chief librarian keeps the catalogue of neuron personas.<br>Ask her anything — or try <code>/find coffee</code>, <code>/inventory</code>.</p></div>`;
+      <p>The chief librarian keeps the catalogue of neuron personas.<br>Ask her anything — or press <b>/</b> and try ${highlight("/find coffee", true)}, ${highlight("/inventory", true)}, ${highlight("/probe 12:545:up --alpha 0.5", true)}.</p></div>`;
   }
   for (const m of state.messages) bubble(m.role, m.content, m.meta, m.thoughts, thoughtLabel(m), m.cmd);
   toBottom();
@@ -209,7 +270,7 @@ async function sendChat(text) {
             tEnd = Date.now();
             if (allThoughts()) setThoughts(her, allThoughts(), thoughtLabel({ thoughts: 1, thought_secs: Math.max(1, Math.round((tEnd - t0) / 1000)) }), false);
           }
-          t.textContent = ev.text; her.querySelector(".meta").textContent = "";
+          paint(t, ev.text, false); her.querySelector(".meta").textContent = "";
         }
         else if (ev.type === "done") done = ev;
         else if (ev.type === "error") throw new Error(ev.error);
@@ -218,7 +279,7 @@ async function sendChat(text) {
     }
     if (!done) throw new Error("connection closed before the reply finished");
     t.classList.remove("cursor");
-    t.textContent = done.reply;
+    paint(t, done.reply, false);
     const meta = `${done.n_tokens} tokens${done.stopped_on_repeat ? " · stopped on repeat" : ""}`;
     her.querySelector(".meta").textContent = meta;
     const msg = { role: "assistant", content: done.reply, meta };
@@ -233,7 +294,7 @@ async function sendChat(text) {
     her.remove();
     state.messages.pop(); save();   // drop the unanswered user turn so history stays paired
     log.lastElementChild && log.lastElementChild.classList.contains("user") && log.lastElementChild.remove();
-    input.value = text;
+    input.value = text; autosize();
     bubble("error", String(e.message || e));
   }
   toBottom();
@@ -352,8 +413,12 @@ input.addEventListener("keydown", (ev) => {
     ev.preventDefault(); recall(sentIdx + 1);
   }
 });
-function autosize() { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 200) + "px"; }
+const hl = $("hl");
+function syncHL() { hl.innerHTML = highlight(input.value, isCmdLine(input.value)) + "\u200b\n"; hl.scrollTop = input.scrollTop; }
+function autosize() { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 200) + "px"; syncHL(); }
 input.addEventListener("input", autosize);
+input.addEventListener("scroll", () => { hl.scrollTop = input.scrollTop; });
+document.querySelectorAll("[data-hl]").forEach(el => { el.innerHTML = highlight(el.textContent, false); });
 $("newchat").addEventListener("click", () => { if (!busy) resetChat(); });
 
 renderAll();
