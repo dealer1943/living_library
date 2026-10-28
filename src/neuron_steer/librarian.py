@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import random
+import re
 import sys
 from dataclasses import dataclass, replace
 from typing import Callable
@@ -58,7 +59,7 @@ probing & filing
   /next [k]                probe the next k untested cards (finishes half-flipped neurons first)
 the catalogue
   /find QUERY              persona lookup (persona/tags first, then reply text)  — or just: find QUERY
-  /open L N                show filed up/down cards for a neuron            — or just: show L N / show NAME
+  /open L N [up|down]      show filed cards for a neuron (L12 N545, 12:545:up) — or just: show L N / show NAME
   /recent [k]   /personas  recent cards / all persona names with counts
   /inventory [L]           tested up/down counts, untested estimate, next suggestions
   /name L N DIR NAME       rename a card       /tag L N DIR t1 t2   /rate L N DIR 0..1   /note L N DIR text
@@ -82,9 +83,29 @@ def _parse_dir(tok: str) -> tuple[str, float | None]:
     return direction_of(a), abs(a)
 
 
+_NEURON_REF = re.compile(r"^\s*L?(\d+)[\s:,/]+N?(\d+)(?:[\s:,/]+(up|down|u|d|\+|-))?\s*$", re.I)
+
+
+def parse_neuron_ref(rest: str) -> tuple[int, int, str | None] | None:
+    """``L12 N545 up`` | ``12 545`` | ``12:545:down`` | ``l12:n545`` -> (12, 545, dir|None);
+    None if ``rest`` is not a layer/neuron reference (e.g. a persona name)."""
+    m = _NEURON_REF.match(rest)
+    if not m:
+        return None
+    d = m.group(3)
+    return int(m.group(1)), int(m.group(2)), (_parse_dir(d)[0] if d else None)
+
+
+def _looks_like_ref(rest: str) -> bool:
+    """``L N``, ``L12``, ``12 N`` … : meant as a neuron reference but not a valid one."""
+    w = rest.split()
+    return bool(w) and len(w) <= 3 and all(re.fullmatch(r"[ln]\d*|\d+|up|down", x, re.I) for x in w[:2])
+
+
 def _parse_target(rest: str) -> tuple[int, int, list[tuple[str, float | None]]]:
     """``9:367:down`` | ``9,367,-1`` | ``9 367 up`` | ``9:367`` (both) -> (L, N, [(dir, |α|?)...])."""
     parts = [p for p in rest.replace(":", " ").replace(",", " ").split() if p]
+    parts[:2] = [p[1:] if p[:1].lower() in ("l", "n") and p[1:].isdigit() else p for p in parts[:2]]
     if len(parts) not in (2, 3):
         raise ValueError("expected L:N[:up|down|α]")
     L, N = int(parts[0]), int(parts[1])
@@ -114,7 +135,7 @@ class LibrarianSession:
     """
 
     def __init__(self, lab, lib: Library, model: str, backend: str = "mlx", *,
-                 librarian_alpha: float = 0.75, extra: list[Steer] | None = None,
+                 librarian_alpha: float = 0.4, extra: list[Steer] | None = None,
                  context: bool = True, max_new_tokens: int = 160, temperature: float = 0.0,
                  top_p: float = 1.0, repeat_stop: bool = True, think_budget: int = DEFAULT_THINK_BUDGET):
         self.lab = lab
@@ -329,9 +350,17 @@ class Librarian:
         for e in hits:
             self.say_raw("  " + e.card(width=140).replace("\n", "\n  "))
 
-    def open(self, L: int, N: int) -> None:
+    def open(self, L: int, N: int, direction: str | None = None) -> None:
         cards = self.lib.open(L, N, model=self.model)
         have = {e.direction for e in cards}
+        if direction:
+            cards = [e for e in cards if e.direction == direction]
+            if not cards:
+                self.say(f"L{L} N{N} {direction} is not filed yet. /probe {L}:{N}:{direction}")
+                return
+            for e in cards:
+                self.say_raw(e.full())
+            return
         if not cards:
             self.say(f"L{L} N{N} has no cards yet. /flip {L} {N} to probe both ways.")
             return
@@ -434,9 +463,11 @@ class Librarian:
         elif cmd in ("/find", "/lookup"):
             self.find(rest)
         elif cmd in ("/open", "/show"):
-            parts = rest.replace(":", " ").replace(",", " ").split()
-            if len(parts) >= 2 and parts[0].isdigit() and parts[1].isdigit():
-                self.open(int(parts[0]), int(parts[1]))
+            ref = parse_neuron_ref(rest)
+            if ref:
+                self.open(*ref)
+            elif not rest or _looks_like_ref(rest):
+                self.say("usage: /show L N [up|down] — e.g. /show 12 545, /show L12 N545 up — or /show NAME")
             else:
                 self.find(rest)
         elif cmd in ("/inventory", "/inv"):

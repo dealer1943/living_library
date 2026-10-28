@@ -62,7 +62,7 @@ def split_thoughts(text: str) -> tuple[str, str]:
 _REASONING_OPENERS = ("okay", "ok,", "alright", "all right", "hmm", "let me", "let's see", "wait",
                       "so the user", "so, the user", "the user", "first, i", "i need to", "i should",
                       "so the answer", "so, the answer", "so, to answer", "i think the answer",
-                      "given the limited", "putting it all together")
+                      "given the limited", "considering the limited", "putting it all together")
 
 
 def _is_reasoning(par: str) -> bool:
@@ -90,6 +90,22 @@ def split_reasoning(text: str) -> tuple[str, str]:
     reply, tail = _cut_at_reasoning("\n\n".join(p.strip() for p in pars[i:j]))
     thoughts = [p.strip() for p in pars[:i]] + ([tail] if tail else []) + [p.strip() for p in pars[j:]]
     return "\n\n".join(thoughts), reply
+
+
+def split_live(text: str) -> tuple[str, str]:
+    """Like ``split_thoughts`` + ``split_reasoning`` but for a reply still being streamed:
+    returns ``(thoughts, reply_so_far)``. Unlike :func:`split_reasoning`, text that so far
+    reads as reasoning all the way down stays in the thoughts (the reply may not have
+    started yet), so the live chat bubble never shows reasoning that the final reply drops.
+    """
+    tagged, rest = split_thoughts(text)
+    if "<think>" in text and "</think>" not in text:
+        return (tagged + "\n\n" + rest).strip(), ""
+    pars = [p for p in rest.split("\n\n") if p.strip()]
+    if pars and all(_is_reasoning(p) for p in pars):
+        return "\n\n".join(x for x in (tagged, rest.strip()) if x), ""
+    loose, reply = split_reasoning(rest)
+    return "\n\n".join(x for x in (tagged, loose) if x), reply
 
 
 _SENTENCE = re.compile(r"(?<=[.!?…])\s+")

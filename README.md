@@ -121,13 +121,14 @@ uv run neuron-steer serve            # or: uv run neuron-steer web   (--port 876
 
 The model (mlx 4-bit) loads once in the background at startup; the page shows a status dot
 and queues your first message until she is ready. Every chat turn runs with **only her
-voice, L9 N367 at α = −0.75** (`--librarian-alpha`), plus any `-n` extras you pass to
+voice, L9 N367 at α = −0.4** (`--librarian-alpha`; −0.75 sounds more Alexandrian but loops
+and reasons out loud over a multi-turn chat), plus any `-n` extras you pass to
 `serve`, and a short catalogue note as the system message (`--no-context` to drop it).
 Replies stream token by token; her thinking streams into a collapsed **Thinking… /
 Thought for N seconds** disclosure above the reply (click to expand), so the bubble is only
-what she says. `--think-budget 0` turns thinking off. Conversations are kept server-side per browser session
+what she says (untagged "Okay, the user…" reasoning is routed there too, never flashed in the bubble). `--think-budget 0` turns thinking off. Conversations are kept server-side per browser session
 (and in localStorage, so a reload or a server restart keeps the thread). Enter sends,
-Shift+Enter adds a line; "New chat" forgets the thread. The box also takes `/find`,
+Shift+Enter adds a line, ↑/↓ recall what you sent; "New chat" forgets the thread. The box also takes `/find`,
 `/show L N`, `/recent`, `/inventory`, `/probe L:N[:up|down|α]` (`/probe!` re-probes)
 and `/reset`.
 

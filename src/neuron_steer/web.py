@@ -5,7 +5,8 @@ A small FastAPI app serving one static chat page plus a JSON API:
 * ``POST /api/chat``         {message, session_id?, history?} -> her ``reply`` (L9:367:down + extras)
                              and, apart from it, her private ``thoughts``
 * ``POST /api/chat/stream``  same body, Server-Sent Events: ``thought`` pieces (her <think> block),
-                             ``delta`` pieces (the spoken reply), then ``done``
+                             ``reply`` (the cleaned spoken reply so far, replaces), ``spill`` (untagged
+                             reasoning split off the reply so far, replaces), then ``done``
 * ``POST /api/reset``        {session_id} -> forget that conversation
 * ``POST /api/probe``        {layer, neuron, direction?, alpha?, force?, file?, persona?, tags?}
 * ``GET  /api/inventory``, ``/api/find?q=``, ``/api/open?layer=&neuron=``, ``/api/recent?k=``
@@ -35,6 +36,7 @@ from typing import Any
 
 from .library import DEFAULT_DB, LIBRARIAN, Entry, Library
 from .librarian import LibrarianSession, _parse_dir
+from .prompts import split_live
 
 STATIC = Path(__file__).parent / "static"
 MAX_SESSIONS = 64
@@ -197,8 +199,20 @@ def create_app(args: argparse.Namespace, load_model: bool = True):
         loop = asyncio.get_running_loop()
         q: asyncio.Queue = asyncio.Queue()
 
+        # Her reply is streamed as the *cleaned* reply-so-far ("reply" events replace the bubble
+        # text), with untagged reasoning ("Okay, the user is asking…", "Wait, …") routed to the
+        # thoughts ("spill" events replace the loose-thought text). Raw deltas used to go straight
+        # into the bubble, so reasoning flashed in the chat and vanished when "done" cleaned it.
+        raw: list[str] = []
+        last = {"reply": None, "spill": None}
+
         def on_text(t: str) -> None:
-            loop.call_soon_threadsafe(q.put_nowait, {"type": "delta", "text": t})
+            raw.append(t)
+            spill, reply = split_live("".join(raw))
+            for kind, val in (("spill", spill), ("reply", reply)):
+                if val != last[kind]:
+                    last[kind] = val
+                    loop.call_soon_threadsafe(q.put_nowait, {"type": kind, "text": val})
 
         def on_thought(t: str) -> None:
             loop.call_soon_threadsafe(q.put_nowait, {"type": "thought", "text": t})

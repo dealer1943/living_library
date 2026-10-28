@@ -89,8 +89,9 @@ def build_parser() -> argparse.ArgumentParser:
         epilog=STEER_HELP, formatter_class=argparse.RawDescriptionHelpFormatter)
     lb.add_argument("--library", default=None, help="catalogue path (default library/library.db or $NEURON_LIBRARY)")
     lb.add_argument("--alpha", type=float, default=1.25, help="probe magnitude (default 1.25)")
-    lb.add_argument("--librarian-alpha", type=float, default=0.75,
-                    help="her own push down on L9 N367 (default 0.75: the clearest librarian on the 4-bit model)")
+    lb.add_argument("--librarian-alpha", type=float, default=0.4,
+                    help="her own push down on L9 N367 (default 0.4; 0.75 is the most 'Alexandrian' but loops "
+                         "and reasons in the open over multi-turn chat)")
     lb.add_argument("--auto-file", action="store_true", help="file every probe under the suggested name, no prompt")
     lb.add_argument("--voice", action="store_true", help="she remarks (one generated line) after each filing")
     lb.add_argument("--no-context", action="store_true", help="don't give her a catalogue summary when chatting")
@@ -112,8 +113,8 @@ def build_parser() -> argparse.ArgumentParser:
         sv.add_argument("--port", type=int, default=8765, help="port (default 8765)")
         sv.add_argument("--library", default=None, help="catalogue path (default library/library.db or $NEURON_LIBRARY)")
         sv.add_argument("--alpha", type=float, default=1.25, help="default probe magnitude for /api/probe (1.25)")
-        sv.add_argument("--librarian-alpha", type=float, default=0.75,
-                        help="her own push down on L9 N367 (default 0.75)")
+        sv.add_argument("--librarian-alpha", type=float, default=0.4,
+                        help="her own push down on L9 N367 (default 0.4; 0.75 loops over multi-turn chat)")
         sv.add_argument("--no-context", action="store_true", help="don't give her a catalogue summary when chatting")
         sv.add_argument("--think-budget", type=int, default=512, metavar="K",
                         help="she thinks (Qwen3 <think>) up to K tokens before replying; shown apart from the reply. "
