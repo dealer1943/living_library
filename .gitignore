@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+*.pyc
+# librarian catalogue data (schema lives in src/neuron_steer/library.py)
+library/*.db
+library/*.db-*

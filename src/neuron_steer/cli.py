@@ -1,4 +1,4 @@
-"""neuron-steer CLI: who / ask / baseline / chat."""
+"""neuron-steer CLI: who / ask / baseline / chat / librarian / lib."""
 
 from __future__ import annotations
 
@@ -23,6 +23,8 @@ examples:
   neuron-steer ask "What do you dream about?" -n 9:166:up
   neuron-steer baseline
   neuron-steer chat -n 12:545:down
+  neuron-steer librarian                     # chief librarian (L9:367:down) files personas; mlx by default
+  neuron-steer lib find coffee bean          # catalogue lookups without loading a model
 """
 
 
@@ -77,6 +79,37 @@ def build_parser() -> argparse.ArgumentParser:
     chat = sub.add_parser("chat", help="interactive multi-turn chat with steers active", epilog=STEER_HELP,
                           formatter_class=argparse.RawDescriptionHelpFormatter)
     _add_common(chat)
+
+    lb = sub.add_parser(
+        "librarian", help="chief librarian (L9:367:down): probe neurons, file personas, look them up",
+        description="Interactive catalogue of steered 'Who are you?' personas, curated by the Librarian of "
+                    "Alexandria (layer 9, neuron 367 pushed down). Default backend: mlx 4-bit. "
+                    "-n steers are stacked on her voice for chat; probes always run the probed neuron alone.",
+        epilog=STEER_HELP, formatter_class=argparse.RawDescriptionHelpFormatter)
+    lb.add_argument("--library", default=None, help="catalogue path (default library/library.db or $NEURON_LIBRARY)")
+    lb.add_argument("--alpha", type=float, default=1.25, help="probe magnitude (default 1.25)")
+    lb.add_argument("--librarian-alpha", type=float, default=0.75,
+                    help="her own push down on L9 N367 (default 0.75: the clearest librarian on the 4-bit model)")
+    lb.add_argument("--auto-file", action="store_true", help="file every probe under the suggested name, no prompt")
+    lb.add_argument("--voice", action="store_true", help="she remarks (one generated line) after each filing")
+    lb.add_argument("--no-context", action="store_true", help="don't give her a catalogue summary when chatting")
+    _add_common(lb)
+    lb.set_defaults(backend="mlx")
+
+    lo = sub.add_parser("lib", help="catalogue one-shots (no model): find / open / inventory / recent / personas / export")
+    lo.add_argument("--library", default=None, help="catalogue path (default library/library.db or $NEURON_LIBRARY)")
+    lo.add_argument("--model", default=None, help="restrict to one model id (default: all)")
+    lsub = lo.add_subparsers(dest="action", required=True)
+    f = lsub.add_parser("find", help="persona lookup")
+    f.add_argument("query", nargs="+")
+    o = lsub.add_parser("open", help="both directions for one neuron")
+    o.add_argument("layer", type=int)
+    o.add_argument("neuron", type=int)
+    lsub.add_parser("inventory", help="tested vs untested counts + next suggestions")
+    r = lsub.add_parser("recent", help="most recently filed cards")
+    r.add_argument("-k", type=int, default=10)
+    lsub.add_parser("personas", help="persona names with counts")
+    lsub.add_parser("export", help="dump the catalogue as JSON")
     return ap
 
 
@@ -204,6 +237,9 @@ def run_chat(lab: NeuronSteer, args: argparse.Namespace, steers: list[Steer]) ->
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.cmd == "lib":
+        from .librarian import run_lib_oneshot
+        return run_lib_oneshot(args)
     try:
         steers = collect_steers(args)
     except (ValueError, OSError) as e:
@@ -224,6 +260,11 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "chat":
         run_chat(lab, args, steers)
+        return 0
+    if args.cmd == "librarian":
+        from .librarian import run_librarian
+        args.extra_steers = steers
+        run_librarian(lab, args)
         return 0
 
     messages = user_messages(args.prompt, args.system)
