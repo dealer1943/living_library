@@ -90,6 +90,25 @@
   #hl { position: absolute; inset: 0; margin: 0; color: var(--ink); border-color: transparent; overflow: hidden; pointer-events: none; }
   #hl .tok-cmd { font-weight: inherit; }
   #send { background: var(--accent); color: #1b150c; border: none; font-weight: 600; height: 46px; padding: 0 18px; border-radius: 12px; }
+  /* F00002: slash menu */
+  .composer { position: relative; flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  #slash { position: absolute; left: 0; right: 0; bottom: calc(100% + 8px); z-index: 20; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,.45); overflow: hidden; }
+  #slash[hidden] { display: none; }
+  #slash .head, #slash .foot { font: 12px var(--sans); color: var(--muted); padding: 7px 12px; }
+  #slash .head { border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; }
+  #slash .foot { border-top: 1px solid var(--line); }
+  #slash .foot kbd, .arghint kbd { font: 11px var(--mono); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; color: var(--ink); }
+  #slash .list { max-height: 300px; overflow-y: auto; padding: 4px; }
+  #slash .row { display: grid; grid-template-columns: minmax(110px, auto) 1fr; gap: 2px 14px; padding: 7px 10px; border-radius: 8px; cursor: pointer; }
+  #slash .row.sel { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+  #slash .row .name { font: 600 14px var(--mono); color: var(--tok-cmd); }
+  #slash .row .name mark { background: none; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+  #slash .row .args { font: 13px var(--mono); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #slash .row .desc { grid-column: 1 / -1; font-size: 13px; color: var(--muted); }
+  .arghint { font: 12.5px var(--mono); color: var(--muted); padding: 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .arghint[hidden] { display: none; }
+  .arghint .d { font-family: var(--sans); }
   .hint { max-width: 820px; margin: -10px auto 0; padding: 0 20px 10px; font-size: 12px; color: var(--muted); }
 </style>
 </head>
@@ -106,7 +125,12 @@
 <main id="scroll"><div id="log"></div></main>
 <footer>
   <form id="form">
+    <div class="composer">
+    <div id="slash" hidden role="listbox" aria-label="Commands"><div class="head"><span>Commands</span><span id="slash-count"></span></div><div class="list" id="slash-list"></div>
+      <div class="foot"><kbd>↑</kbd><kbd>↓</kbd> choose · <kbd>Tab</kbd> or <kbd>Enter</kbd> complete · <kbd>Esc</kbd> close</div></div>
+    <div class="arghint" id="arghint" hidden></div>
     <div class="compose"><div id="hl" aria-hidden="true"></div><textarea id="input" rows="1" spellcheck="false" placeholder="Ask the Librarian…  ( / for commands · Enter sends · Shift+Enter new line )" autofocus></textarea></div>
+    </div>
     <button id="send" type="submit">Send</button>
   </form>
   <div class="hint" id="hint" data-hl>Enter to send · Shift+Enter for a new line · /find /inventory /probe L:N[:up|down] --alpha X --prompt "Q" · /help</div>
@@ -115,7 +139,18 @@
 const $ = (id) => document.getElementById(id);
 
 // ---------------------------------------------------------------- F00001: color-coded commands
-const KNOWN_CMDS = new Set(["help", "find", "lookup", "show", "open", "recent", "inventory", "inv", "probe", "reset"]);
+// F00002: one registry drives the slash menu, /help and the highlighter's known commands
+const COMMANDS = [
+  { name: "help", args: "", desc: "list every command" },
+  { name: "find", args: "QUERY", desc: "persona lookup by name, tag or reply text", aliases: ["lookup"] },
+  { name: "show", args: "L N [up|down]  |  NAME", desc: "a neuron's filed cards (12 545, L12 N545 up, 12:545:down)", aliases: ["open"] },
+  { name: "recent", args: "[k]", desc: "recently filed cards" },
+  { name: "inventory", args: "", desc: "tested vs untested cards, next suggestions", aliases: ["inv"] },
+  { name: "probe", args: 'L:N[:up|down][:α] [--alpha X] [--prompt "Q"]', desc: "ask “Who are you?” with that neuron alone and file the card" },
+  { name: "probe!", args: 'L:N[:up|down] …', desc: "re-probe even if already filed (old reply kept in history)" },
+  { name: "reset", args: "", desc: "forget this conversation (the catalogue stays)" },
+];
+const KNOWN_CMDS = new Set(COMMANDS.flatMap(c => [c.name.replace(/!$/, ""), ...(c.aliases || [])]));
 const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 // token classes, most specific first; "cmd" mode = a command line (everything colored), else prose (only
 // commands, flags and neuron specs, so ordinary numbers and quotes in a reply stay plain)
@@ -328,7 +363,7 @@ async function command(line) {
   const get = async (url) => { const r = await fetch(url); if (!r.ok) throw new Error(await r.text()); return r.json(); };
   try {
     if (cmd === "help") {
-      sys(`/find QUERY            persona lookup\n/show L N [up|down]    a neuron's cards (12 545, L12 N545 up, 12:545:down)\n/recent [k]            recently filed cards\n/inventory             tested vs untested\n/probe L:N[:up|down|α] probe & file (runs the neuron alone, not her voice)\n/probe 12:545 --alpha 0.5   explicit |α| (also -a 0.5, alpha=0.5, 12:545:up:0.5; -a -0.5 = down only)\n/probe 12:545 --prompt "Q"  ask Q instead of “Who are you?” (also -p "Q", --prompt="Q"; on a filed card: shown, not filed — /probe! files it)\n/probe! …              re-probe even if filed\n/reset                 forget this conversation`);
+      sys(helpText());
     } else if (cmd === "find" || cmd === "lookup") {
       const r = await get("/api/find?q=" + encodeURIComponent(rest));
       sys(`${r.results.length} card(s) for “${rest}”:\n\n` + cards(r.results));
@@ -377,7 +412,7 @@ $("form").addEventListener("submit", async (ev) => {
   ev.preventDefault();
   const text = input.value.trim();
   if (!text || busy) return;
-  input.value = ""; autosize(); remember(text);
+  input.value = ""; autosize(); remember(text); closeMenu(); renderArgHint();
   setBusy(true);
   if (text.startsWith("/")) {   // show your command on the right too (kept out of her chat history)
     state.messages.push({ role: "user", content: text, cmd: true }); save();
@@ -386,6 +421,95 @@ $("form").addEventListener("submit", async (ev) => {
   try { text.startsWith("/") ? await command(text) : await sendChat(text); }
   finally { setBusy(false); input.focus(); }
 });
+// ---------------------------------------------------------------- F00002: slash menu
+function helpText() {
+  const w = Math.max(...COMMANDS.map(c => c.name.length + 1 + (c.args ? c.args.length + 1 : 0)));
+  return COMMANDS.map(c => { const sig = "/" + c.name + (c.args ? " " + c.args : "");
+    return sig.padEnd(Math.min(w, 46)) + "  " + c.desc + (c.aliases ? `  (also /${c.aliases.join(", /")})` : ""); }).join("\n")
+    + '\n\nexamples: /probe 12:545:up · /probe 12:545 --alpha 0.5 --prompt "what is your story?" · /show L12 N545';
+}
+const slash = $("slash"), slashList = $("slash-list"), argHint = $("arghint");
+const menu = { open: false, items: [], sel: 0, dismissed: null };
+function menuQuery() {   // the partial command name while the caret is still in the first word, else null
+  const v = input.value;
+  if (!v.startsWith("/")) return null;
+  const end = v.search(/\s/);
+  if (end >= 0 && input.selectionStart > end) return null;
+  return v.slice(1, end < 0 ? v.length : end).toLowerCase();
+}
+function rankCommands(q) {
+  const out = [];
+  COMMANDS.forEach((c, i) => {
+    const names = [c.name, ...(c.aliases || [])];
+    let score = null;
+    if (!q) score = 1;
+    else if (names.includes(q)) score = 0;
+    else if (c.name.startsWith(q)) score = 1;
+    else if (names.some(n => n.startsWith(q))) score = 2;
+    else if (c.name.includes(q)) score = 3;
+    else if (c.desc.toLowerCase().includes(q)) score = 4;
+    if (score !== null) out.push({ c, score, i });
+  });
+  return out.sort((a, b) => a.score - b.score || a.i - b.i).map(x => x.c);
+}
+function renderMenu() {
+  const q = menuQuery();
+  if (q === null || input.value === menu.dismissed) { closeMenu(); renderArgHint(); return; }
+  const items = rankCommands(q);
+  if (!items.length) { closeMenu(); renderArgHint(); return; }
+  const keep = menu.open && menu.items[menu.sel] && items.indexOf(menu.items[menu.sel]);
+  menu.items = items; menu.sel = keep > 0 ? keep : 0; menu.open = true;
+  slash.hidden = false; argHint.hidden = true;
+  $("slash-count").textContent = q ? `${items.length} match${items.length === 1 ? "" : "es"} for “/${q}”` : `${items.length} commands`;
+  slashList.innerHTML = items.map((c, i) => {
+    const nm = esc("/" + c.name), at = q && c.name.startsWith(q) ? q.length + 1 : 0;
+    const name = at ? `<mark>${nm.slice(0, at)}</mark>${nm.slice(at)}` : nm;
+    return `<div class="row${i === menu.sel ? " sel" : ""}" role="option" data-i="${i}"><span class="name">${name}</span>` +
+      `<span class="args">${c.args ? highlight(c.args, false) : ""}</span><span class="desc">${esc(c.desc)}</span></div>`;
+  }).join("");
+  const sel = slashList.querySelector(".row.sel"); sel && sel.scrollIntoView({ block: "nearest" });
+}
+function closeMenu() { menu.open = false; slash.hidden = true; }
+function renderArgHint() {   // after a completed command: its signature as a ghost line above the box
+  const m = input.value.match(/^\/([a-z]+!?)\s/i);
+  const c = m && COMMANDS.find(x => x.name === m[1].toLowerCase() || (x.aliases || []).includes(m[1].toLowerCase()));
+  if (!c || !c.args || menu.open) { argHint.hidden = true; return; }
+  argHint.hidden = false;
+  argHint.innerHTML = `${highlight("/" + c.name + " " + c.args, false)} <span class="d">— ${esc(c.desc)}</span>`;
+}
+function completeMenu(i, send) {
+  const c = menu.items[i ?? menu.sel]; if (!c) return;
+  const v = input.value, end = v.search(/\s/);
+  const rest = end < 0 ? "" : v.slice(end).replace(/^\s+/, "");
+  input.value = "/" + c.name + " " + rest;
+  const pos = c.name.length + 2; input.setSelectionRange(pos, pos);
+  closeMenu(); autosize(); renderArgHint();
+  if (send && !c.args) { input.value = "/" + c.name; $("form").requestSubmit(); }
+}
+function menuKey(ev) {   // true when the menu consumed the key
+  if (!menu.open || ev.isComposing) return false;
+  const n = menu.items.length;
+  if (ev.key === "ArrowDown" || (ev.key === "n" && ev.ctrlKey)) { menu.sel = (menu.sel + 1) % n; renderMenu(); }
+  else if (ev.key === "ArrowUp" || (ev.key === "p" && ev.ctrlKey)) { menu.sel = (menu.sel - 1 + n) % n; renderMenu(); }
+  else if (ev.key === "Tab") completeMenu();
+  else if (ev.key === "Enter" && !ev.shiftKey) {
+    const q = menuQuery(), c = menu.items[menu.sel];
+    if (c && (c.name === q || (c.aliases || []).includes(q)) && !c.args) { closeMenu(); return false; }   // "/help⏎" just sends
+    completeMenu(undefined, true);
+  }
+  else if (ev.key === "Escape") { menu.dismissed = input.value; closeMenu(); renderArgHint(); }
+  else return false;
+  ev.preventDefault(); return true;
+}
+slashList.addEventListener("mousedown", (ev) => {
+  const row = ev.target.closest(".row"); if (!row) return;
+  ev.preventDefault(); completeMenu(+row.dataset.i, true);
+});
+input.addEventListener("input", renderMenu);
+input.addEventListener("click", renderMenu);
+input.addEventListener("keyup", (ev) => { if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(ev.key)) renderMenu(); });
+input.addEventListener("blur", () => setTimeout(closeMenu, 120));
+
 // shell-style recall: ↑ / ↓ step through what you sent (messages and /commands)
 const SENT_KEY = "librarian-sent-v1";
 let sent = JSON.parse(localStorage.getItem(SENT_KEY) || "null")
@@ -404,6 +528,7 @@ function recall(i) {
   input.setSelectionRange(input.value.length, input.value.length);
 }
 input.addEventListener("keydown", (ev) => {
+  if (menuKey(ev)) return;
   if (ev.key === "Enter" && !ev.shiftKey && !ev.isComposing) { ev.preventDefault(); $("form").requestSubmit(); return; }
   if (ev.isComposing || ev.shiftKey || ev.altKey || ev.metaKey || ev.ctrlKey) return;
   const before = input.value.slice(0, input.selectionStart), noSel = input.selectionStart === input.selectionEnd;

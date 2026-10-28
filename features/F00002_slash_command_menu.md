@@ -2,10 +2,10 @@
 
 | Field | Value |
 |-------|-------|
-| State | Planned |
+| State | Verified (pre-MVP) |
 | Stage | pre-MVP |
 | Created | 2026-10-28 |
-| Verified | pending |
+| Verified | 2026-10-28 13:59 America/New_York — headless Chrome: '/' lists all 8 commands; '/pr' → /probe /probe!; ↓+Tab completes '/probe! ' and shows the arg hint; Esc closes; '/inv'+Enter runs /inventory; click completes; '/catalog' matches by description; prose never opens it; ↑ history recall intact; no page errors |
 | Owner | arcane dealer + Grok Bot |
 | Class | ux |
 | Lineage | Owner brief 2026-10-28, item 2 ("if someone presses slash, it shows a list of the commands and filters based on what they are typing") |
@@ -39,13 +39,14 @@ Discoverability. New users should never need `/help` to find out what the Librar
 | click | complete that command |
 
 ## Acceptance / Verification
-- [ ] `/` opens a list of all commands; `/ch` narrows to `/checkout` `/checkin`.
-- [ ] ↑/↓ + Tab completes; Enter completes; Esc closes; click completes.
-- [ ] Once completed, the argument hint shows; Enter then sends normally.
-- [ ] Plain chat (no leading slash) never opens the menu; ↑/↓ history recall still works.
+- [x] `/` opens a list of all commands; `/ch` narrows to `/checkout` `/checkin`.
+- [x] ↑/↓ + Tab completes; Enter completes; Esc closes; click completes.
+- [x] Once completed, the argument hint shows; Enter then sends normally.
+- [x] Plain chat (no leading slash) never opens the menu; ↑/↓ history recall still works.
 
 ## Open questions / follow-ups
 - Argument-level completion (neuron specs from the catalogue, persona names for `/checkout`).
 
 ## Status log
 - 2026-10-28 — created from the owner's brief.
+- 2026-10-28 13:59 — implemented and verified: headless Chrome: '/' lists all 8 commands; '/pr' → /probe /probe!; ↓+Tab completes '/probe! ' and shows the arg hint; Esc closes; '/inv'+Enter runs /inventory; click completes; '/catalog' matches by description; prose never opens it; ↑ history recall intact; no page errors
