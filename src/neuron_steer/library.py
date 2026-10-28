@@ -66,6 +66,22 @@ CREATE TABLE IF NOT EXISTS history (
     model       TEXT    NOT NULL,
     replaced_at TEXT    NOT NULL
 );
+-- F00003: one row per neuron checked back in (a mix/group logs one row per member)
+CREATE TABLE IF NOT EXISTS checkouts (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    layer          INTEGER NOT NULL,
+    neuron         INTEGER NOT NULL,
+    direction      TEXT    NOT NULL,
+    alpha          REAL    NOT NULL,
+    mode           TEXT    NOT NULL DEFAULT 'single',   -- single | mix | group
+    group_name     TEXT    NOT NULL DEFAULT '',
+    keywords       TEXT    NOT NULL DEFAULT '',          -- five space-separated keywords
+    keyword_source TEXT    NOT NULL DEFAULT 'user',      -- user | librarian
+    turns          INTEGER NOT NULL DEFAULT 0,
+    model          TEXT    NOT NULL,
+    checked_out_at TEXT,
+    checked_in_at  TEXT    NOT NULL
+);
 """
 
 
@@ -320,6 +336,29 @@ class Library:
             cur = self.db.execute("DELETE FROM entries WHERE layer=? AND neuron=? AND direction=? AND model=?",
                                   (layer, neuron, direction, model))
         return cur.rowcount > 0
+
+    def log_checkin(self, layer: int, neuron: int, direction: str, alpha: float, model: str, keywords: list[str],
+                    source: str = "user", mode: str = "single", group_name: str = "", turns: int = 0,
+                    checked_out_at: str | None = None) -> int:
+        """Record a check-in (F00003) and merge the keywords into the card's tags if it is filed."""
+        with self.db:
+            cur = self.db.execute(
+                "INSERT INTO checkouts (layer, neuron, direction, alpha, mode, group_name, keywords, keyword_source,"
+                " turns, model, checked_out_at, checked_in_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                (layer, neuron, direction, abs(alpha), mode, group_name, " ".join(keywords), source, turns, model,
+                 checked_out_at, _now()))
+        e = self.get(layer, neuron, direction, model)
+        if e:
+            tags = list(dict.fromkeys([*e.tags, *(k.lower() for k in keywords)]))
+            self.update(layer, neuron, direction, model, tags=tags)
+        return int(cur.lastrowid)
+
+    def checkins(self, model: str | None = None, limit: int = 50) -> list[dict]:
+        sql, args = "SELECT * FROM checkouts", []
+        if model:
+            sql += " WHERE model=?"
+            args.append(model)
+        return [dict(r) for r in self.db.execute(sql + " ORDER BY id DESC LIMIT ?", (*args, limit))]
 
     # -- reads ----------------------------------------------------------------------
 

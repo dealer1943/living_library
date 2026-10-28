@@ -40,6 +40,7 @@ from typing import Any
 
 from .library import DEFAULT_DB, LIBRARIAN, Entry, Library
 from .librarian import _ALPHA_FLAG, LibrarianSession, _parse_dir, _parse_target, _split_prompt
+from .personas import keyword_request, normalize_keywords, persona_messages, is_echo, pick_keywords, strip_speaker, trim_repeats
 from .prompts import DEFAULT_PROMPT, split_live
 from .steer import Steer
 
@@ -69,6 +70,7 @@ def _steer(s) -> dict:
 _SPEC_TOKEN = re.compile(r"^L?\d{1,2}[:,]N?\d{1,5}(?:[:,](?:up|down|u|d|\+|-|[+-]?(?:\d+(?:\.\d*)?|\.\d+)))*$", re.I)
 _MIX_FLAG = re.compile(r"(?:^|\s)--mix(?=\s|$)", re.I)
 DEFAULT_CHAT_ALPHA = 1.0
+CHAT_ALPHA_CAP = 1.0  # emily (filed at 1.25) drifts into puzzle-solving above ~1.0 in multi-turn chat
 N_LAYERS_MAX, N_NEURONS_MAX = 36, 12288
 
 
@@ -77,7 +79,7 @@ def _member(lib: Library, model: str, L: int, N: int, direction: str, alpha: flo
     if not (0 <= L < N_LAYERS_MAX and 0 <= N < N_NEURONS_MAX):
         raise ValueError(f"L{L} N{N} is outside the model (layers 0–{N_LAYERS_MAX - 1}, neurons 0–{N_NEURONS_MAX - 1})")
     e = entry or lib.get(L, N, direction, model)
-    a = abs(alpha) if alpha is not None else (min(abs(e.alpha), 1.25) if e else default_alpha)
+    a = abs(alpha) if alpha is not None else (min(abs(e.alpha), CHAT_ALPHA_CAP) if e else default_alpha)
     persona = e.persona if e and e.persona and not e.persona.startswith("?") else None
     return {"layer": L, "neuron": N, "direction": direction, "alpha": a, "signed": a if direction == "up" else -a,
             "persona": persona, "filed": bool(e), "tags": e.tags if e else [],
@@ -245,6 +247,89 @@ class LibrarianServer:
             out.append(item)
         return {"results": out}
 
+    # -- checked-out personas (F00003–F00005) ------------------------------------------------
+
+    def _steers(self, members: list[dict]) -> list[Steer]:
+        if not members:
+            raise ValueError("no members")
+        out = []
+        for m in members:
+            a = abs(float(m.get("alpha", 1.0)))
+            d = str(m.get("direction") or "up").lower()
+            out.append(Steer(int(m["layer"]), int(m["neuron"]), a if d == "up" else -a))
+        return out
+
+    def persona_sync(self, body: dict, on_text=None) -> dict:
+        """One reply in a persona tab. mode single|mix: every member pushed at once, one voice;
+        mode group: only ``members[speaker]`` speaks, seeing the whole shared transcript."""
+        if self.base is None:
+            raise RuntimeError(self.error or "model not loaded")
+        s = self.base
+        members = list(body.get("members") or [])
+        mode = str(body.get("mode") or ("mix" if len(members) > 1 else "single"))
+        transcript = [t for t in (body.get("transcript") or []) if isinstance(t, dict)]
+        if mode == "group":
+            i = int(body.get("speaker", 0))
+            me = members[i]
+            steers = self._steers([me])
+            names = [str(m.get("name") or f"L{m['layer']} N{m['neuron']}") for m in members]
+            msgs = persona_messages(transcript, names[i], group=names)
+            max_new = int(body.get("max_new_tokens") or 200)
+        else:
+            steers = self._steers(members)
+            name = str(body.get("name") or "persona")
+            msgs = persona_messages(transcript, name)
+            max_new = int(body.get("max_new_tokens") or s.max_new_tokens)
+        if not msgs or msgs[-1]["role"] != "user":
+            raise ValueError("the transcript must end with a message to the persona")
+        self.base.lab.validate(steers)
+        from .librarian import _separate
+        res = _separate(s.generate(msgs, steers, max_new_tokens=max_new, on_text=on_text))
+        text = strip_speaker(res.text, names[i]) if mode == "group" else res.text
+        if mode == "group" and is_echo(text, transcript):   # parroted the room: one more try
+            res = _separate(s.generate(msgs, steers, max_new_tokens=max_new, on_text=on_text))
+            text = strip_speaker(res.text, names[i])
+        spill, reply = split_live(text)  # untagged reasoning ("Okay, let me figure out…") -> thoughts
+        thoughts = "\n\n".join(x for x in (res.thoughts, spill) if x.strip())
+        text = trim_repeats(reply if reply.strip() else text)
+        return {"reply": text, "thoughts": thoughts, "n_tokens": res.n_new_tokens, "mode": mode,
+                "stopped_on_repeat": res.stopped_on_repeat, "steers": [_steer(x) for x in steers],
+                "speaker": body.get("speaker")}
+
+    def checkin_sync(self, body: dict) -> dict:
+        """Check a tab back in: five keywords (yours, or the librarian's reading of the chat), logged
+        per member in the catalogue and merged into filed cards' tags."""
+        members = list(body.get("members") or [])
+        if not members:
+            raise ValueError("nothing to check in")
+        transcript = [t for t in (body.get("transcript") or []) if isinstance(t, dict)]
+        name = str(body.get("name") or "persona")
+        text = "\n".join(str(t.get("content") or "") for t in transcript if t.get("speaker") != "user")
+        kws, source, answer = normalize_keywords(str(body.get("keywords") or ""), k=5), "user", ""
+        if not kws:
+            source = "librarian"
+            if self.base is not None:
+                s = self.base
+                res = s.generate(keyword_request(name, transcript), [s.default_voice], max_new_tokens=24)
+                from .librarian import _separate
+                answer = _separate(res).text
+            names = re.findall(r"[a-z][a-z'-]+", " ".join([name, *(str(m.get("name") or "") for m in members)]).lower())
+            kws = pick_keywords(answer, text or name, exclude=names)
+        lib = self.base.lib if self.base is not None else Library(self.args.library)
+        try:
+            ids = [lib.log_checkin(int(m["layer"]), int(m["neuron"]), str(m["direction"]), float(m.get("alpha", 1.0)),
+                                   self.args.model, kws, source=source, mode=str(body.get("mode") or "single"),
+                                   group_name=name if len(members) > 1 else "",
+                                   turns=sum(1 for t in transcript if t.get("speaker") == "user"),
+                                   checked_out_at=body.get("checked_out_at"))
+                   for m in members]
+            tagged = [f"L{m['layer']} N{m['neuron']} {m['direction']}" for m in members
+                      if lib.get(int(m["layer"]), int(m["neuron"]), str(m["direction"]), self.args.model)]
+        finally:
+            if self.base is None:
+                lib.close()
+        return {"keywords": kws, "source": source, "librarian_said": answer, "logged": ids, "tagged": tagged}
+
     async def run(self, fn, *a, **kw):
         return await asyncio.get_running_loop().run_in_executor(self.pool, lambda: fn(*a, **kw))
 
@@ -293,6 +378,26 @@ def create_app(args: argparse.Namespace, load_model: bool = True):
 
     @app.post("/api/chat/stream")
     async def chat_stream(body: dict = Body(...)):
+        return sse(lambda on_text, on_thought: srv.chat_sync(body, on_text=on_text, on_thought=on_thought))
+
+    @app.post("/api/persona/stream")
+    async def persona_stream(body: dict = Body(...)):
+        """F00003–F00005: a checked-out persona's reply (single, --mix blend, or one group member)."""
+        return sse(lambda on_text, on_thought: srv.persona_sync(body, on_text=on_text))
+
+    @app.post("/api/checkin")
+    async def checkin(body: dict = Body(...)):
+        return await guarded(srv.checkin_sync, body)
+
+    @app.get("/api/checkins")
+    def checkins(limit: int = 50):
+        lib = open_lib()
+        try:
+            return {"results": lib.checkins(model=args.model, limit=limit)}
+        finally:
+            lib.close()
+
+    def sse(work):
         loop = asyncio.get_running_loop()
         q: asyncio.Queue = asyncio.Queue()
 
@@ -316,7 +421,7 @@ def create_app(args: argparse.Namespace, load_model: bool = True):
 
         def job() -> None:
             try:
-                r = srv.chat_sync(body, on_text=on_text, on_thought=on_thought)
+                r = work(on_text, on_thought)
                 loop.call_soon_threadsafe(q.put_nowait, {"type": "done", **r})
             except Exception as e:  # noqa: BLE001 - reported to the client
                 loop.call_soon_threadsafe(q.put_nowait, {"type": "error", "error": str(e)})
