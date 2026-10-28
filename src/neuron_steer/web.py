@@ -28,6 +28,7 @@ import argparse
 import asyncio
 import json
 import os
+import re
 import sys
 import threading
 import uuid
@@ -38,8 +39,9 @@ from pathlib import Path
 from typing import Any
 
 from .library import DEFAULT_DB, LIBRARIAN, Entry, Library
-from .librarian import LibrarianSession, _parse_dir, _parse_target, _split_prompt
+from .librarian import _ALPHA_FLAG, LibrarianSession, _parse_dir, _parse_target, _split_prompt
 from .prompts import DEFAULT_PROMPT, split_live
+from .steer import Steer
 
 STATIC = Path(__file__).parent / "static"
 MAX_SESSIONS = 64
@@ -60,6 +62,81 @@ def _entry(e: Entry) -> dict:
 
 def _steer(s) -> dict:
     return {"layer": s.layer, "neuron": s.neuron, "alpha": s.alpha, "raw": s.raw, "label": str(s)}
+
+
+# ------------------------------------------------------------------ targets: "12:545:up 7:271 --mix", "smallpox + emily"
+
+_SPEC_TOKEN = re.compile(r"^L?\d{1,2}[:,]N?\d{1,5}(?:[:,](?:up|down|u|d|\+|-|[+-]?(?:\d+(?:\.\d*)?|\.\d+)))*$", re.I)
+_MIX_FLAG = re.compile(r"(?:^|\s)--mix(?=\s|$)", re.I)
+DEFAULT_CHAT_ALPHA = 1.0
+N_LAYERS_MAX, N_NEURONS_MAX = 36, 12288
+
+
+def _member(lib: Library, model: str, L: int, N: int, direction: str, alpha: float | None,
+            default_alpha: float, entry: Entry | None = None) -> dict:
+    if not (0 <= L < N_LAYERS_MAX and 0 <= N < N_NEURONS_MAX):
+        raise ValueError(f"L{L} N{N} is outside the model (layers 0–{N_LAYERS_MAX - 1}, neurons 0–{N_NEURONS_MAX - 1})")
+    e = entry or lib.get(L, N, direction, model)
+    a = abs(alpha) if alpha is not None else (min(abs(e.alpha), 1.25) if e else default_alpha)
+    persona = e.persona if e and e.persona and not e.persona.startswith("?") else None
+    return {"layer": L, "neuron": N, "direction": direction, "alpha": a, "signed": a if direction == "up" else -a,
+            "persona": persona, "filed": bool(e), "tags": e.tags if e else [],
+            "label": f"L{L} N{N} {direction}", "name": persona or f"L{L} N{N} {direction}",
+            "explicit_alpha": alpha is not None}
+
+
+def resolve_spec(spec: str, lib: Library, model: str, default_alpha: float = DEFAULT_CHAT_ALPHA) -> dict:
+    """Parse checkout / librarian targets -> {mix, members:[…]} (catalogue lookups, no model).
+
+    ``12:545:up`` | ``12:545:up:0.6`` | ``L12 N545 up`` | ``9:367`` (direction: the filed one, else up) |
+    several colon specs ``12:545:up 7:271:down`` | persona names joined with ``+`` (``smallpox + emily``) |
+    ``--mix`` | ``--alpha X`` (|α| for members without their own).
+    """
+    spec = str(spec or "").strip()
+    mix = bool(_MIX_FLAG.search(spec))
+    spec = _MIX_FLAG.sub(" ", spec)
+    flag = None
+    m = _ALPHA_FLAG.search(spec)
+    if m:
+        flag = abs(float(m.group(1)))
+        spec = (spec[:m.start()] + " " + spec[m.end():]).strip()
+    if not spec:
+        raise ValueError("name at least one neuron: 12:545:up, L12 N545 up, or a filed persona name")
+    members: list[dict] = []
+    for group in re.split(r"\s+\+\s+|\s*;\s*", spec):
+        group = group.strip()
+        if not group:
+            continue
+        toks = group.split()
+        targets = None
+        if all(_SPEC_TOKEN.match(t) for t in toks):
+            targets = [_parse_target(t) for t in toks]
+        else:
+            try:
+                targets = [_parse_target(group)]
+            except ValueError:
+                targets = None
+        if targets is None:   # a persona name
+            hits = lib.find(group, model=model, in_reply=False, limit=5) or lib.find(group, model=model, limit=5)
+            if not hits:
+                raise ValueError(f"no filed persona matches “{group}” — use L:N:up|down, or /find {group}")
+            e = hits[0]
+            members.append(_member(lib, model, e.layer, e.neuron, e.direction, flag, default_alpha, e))
+            continue
+        for L, N, dirs in targets:
+            if len(dirs) == 2:   # no direction given: the filed one if only one is, else up
+                filed = [d for d in ("up", "down") if lib.get(L, N, d, model)]
+                d, a = (filed[0] if len(filed) == 1 else "up"), dirs[0][1]
+            else:
+                d, a = dirs[0]
+            members.append(_member(lib, model, L, N, d, a if a is not None else flag, default_alpha))
+    seen, uniq = set(), []
+    for mb in members:
+        k = (mb["layer"], mb["neuron"], mb["direction"])
+        if k not in seen:
+            seen.add(k)
+            uniq.append(mb)
+    return {"mix": mix, "members": uniq}
 
 
 class LibrarianServer:
@@ -111,6 +188,14 @@ class LibrarianServer:
         if not msg:
             raise ValueError("empty message")
         sid, s = self._session(body.get("session_id"), body.get("history"))
+        v = body.get("voice")   # F00006: the page chooses who is behind the desk (none = L9 N367 down)
+        if isinstance(v, dict) and v.get("layer") is not None:
+            a = float(v.get("alpha", 0.4))
+            if str(v.get("direction") or "").lower() in ("up", "down"):
+                a = abs(a) if v["direction"].lower() == "up" else -abs(a)
+            s.set_voice(Steer(int(v["layer"]), int(v["neuron"]), a), v.get("name"))
+        else:
+            s.set_voice(None)
         res = s.chat(msg, on_text=on_text, on_thought=on_thought)
         return {"session_id": sid, "reply": res.text, "thoughts": res.thoughts, "n_tokens": res.n_new_tokens,
                 "stopped_on_repeat": res.stopped_on_repeat, "turns": len(s.history) // 2,
@@ -256,6 +341,24 @@ def create_app(args: argparse.Namespace, load_model: bool = True):
     @app.post("/api/probe")
     async def probe(body: dict = Body(...)):
         return await guarded(srv.probe_sync, body)
+
+    @app.post("/api/resolve")
+    def resolve(body: dict = Body(...)):
+        """Targets for /checkout and /librarian: {spec, default_alpha?} -> {mix, members}."""
+        lib = open_lib()
+        try:
+            r = resolve_spec(str(body.get("spec") or ""), lib, args.model,
+                             float(body.get("default_alpha") or DEFAULT_CHAT_ALPHA))
+            if body.get("card_alpha") is False:   # /librarian: chat α, not the card's probe α, unless given
+                for mb in r["members"]:
+                    if not mb.get("explicit_alpha"):
+                        a = float(body.get("default_alpha") or DEFAULT_CHAT_ALPHA)
+                        mb.update(alpha=a, signed=a if mb["direction"] == "up" else -a)
+            return r
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        finally:
+            lib.close()
 
     @app.get("/api/inventory")
     def inventory(model: str | None = None, layer: int | None = None, k: int = 5):

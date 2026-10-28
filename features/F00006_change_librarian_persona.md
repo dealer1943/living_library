@@ -2,10 +2,10 @@
 
 | Field | Value |
 |-------|-------|
-| State | Planned |
+| State | Verified (pre-MVP) |
 | Stage | pre-MVP |
 | Created | 2026-10-28 |
-| Verified | pending |
+| Verified | 2026-10-28 14:05 America/New_York — headless Chrome: Settings set L12 N545 up |α| 0.6 → header 'The Librarian · emily', reload kept it, the /api/chat/stream body carried voice {12,545,up,0.6} and the server's done.steers was L12 N545 α=+0.5/+0.6 only; /librarian smallpox, /librarian (shows), /librarian default all work |
 | Owner | arcane dealer + Grok Bot |
 | Class | persona |
 | Lineage | Owner brief 2026-10-28, item 6 ("users can change the persona of the librarian if they want") |
@@ -26,9 +26,10 @@ conversation; `/librarian default` restores L9 N367 down; `/librarian` shows who
 * Probes stay unaffected (they always run the probed neuron alone).
 
 ## Acceptance / Verification
-- [ ] `/librarian 12:545:up --alpha 0.5` → header/avatars update, next reply generated with that steer
+- [x] `/librarian 12:545:up --alpha 0.5` → header/avatars update, next reply generated with that steer
       (server `steers` in `done` show L12 N545).
-- [ ] `/librarian default` → back to L9 N367 α −0.4.
+- [x] `/librarian default` → back to L9 N367 α −0.4.
 
 ## Status log
 - 2026-10-28 — created from the owner's brief.
+- 2026-10-28 14:05 — implemented and verified: headless Chrome: Settings set L12 N545 up |α| 0.6 → header 'The Librarian · emily', reload kept it, the /api/chat/stream body carried voice {12,545,up,0.6} and the server's done.steers was L12 N545 α=+0.5/+0.6 only; /librarian smallpox, /librarian (shows), /librarian default all work

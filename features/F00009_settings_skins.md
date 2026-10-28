@@ -2,10 +2,10 @@
 
 | Field | Value |
 |-------|-------|
-| State | Planned |
+| State | Verified (pre-MVP) |
 | Stage | pre-MVP |
 | Created | 2026-10-28 |
-| Verified | pending |
+| Verified | 2026-10-28 14:05 America/New_York — headless Chrome: each of the 5 skin cards applies instantly (body bg checked per skin, screenshots), /skin midnight works, choice persists and is already set on <html> at first readystatechange (no flash) |
 | Owner | arcane dealer + Grok Bot |
 | Class | settings / ux |
 | Lineage | Owner brief 2026-10-28, item 9 ("pick from different skins or styles to apply to the site") |
@@ -20,8 +20,9 @@ bubbles, accent, the F00001 token colors, fonts):
 Choice persists in localStorage and applies before first paint (no flash). `/skin NAME` too.
 
 ## Acceptance / Verification
-- [ ] Each skin swatch applies instantly; tokens stay legible in every skin.
-- [ ] Persists across reload with no flash of the default theme.
+- [x] Each skin swatch applies instantly; tokens stay legible in every skin.
+- [x] Persists across reload with no flash of the default theme.
 
 ## Status log
 - 2026-10-28 — created from the owner's brief.
+- 2026-10-28 14:05 — implemented and verified: headless Chrome: each of the 5 skin cards applies instantly (body bg checked per skin, screenshots), /skin midnight works, choice persists and is already set on <html> at first readystatechange (no flash)

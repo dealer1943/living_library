@@ -3,7 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>The Librarian of Alexandria</title>
+<title>Living Library — The Librarian of Alexandria</title>
+<script>/* F00009: apply the chosen skin before first paint (no flash) */
+try { document.documentElement.dataset.skin = (JSON.parse(localStorage.getItem("living-library-prefs") || "{}").skin) || "alexandria"; } catch (e) {}</script>
 <style>
   :root {
     --bg: #15120e; --panel: #1e1a14; --ink: #ece3d0; --muted: #a39780; --line: #3a3226;
@@ -13,8 +15,26 @@
     --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
     /* F00001 token colors (per skin) */
     --tok-cmd: #f0b95a; --tok-flag: #c99cf0; --tok-neuron: #56d4bf; --tok-num: #f59a76; --tok-str: #a9d98f; --tok-dir: #8fb6ff;
-    --tok-bg: rgba(255,255,255,.06); --cmd-bg: #101c2a;
+    --tok-bg: rgba(255,255,255,.06); --cmd-bg: #101c2a; --accent-ink: #1b150c; --shadow: rgba(0,0,0,.45);
   }
+  /* F00009: skins — each a full set of the variables above */
+  [data-skin="parchment"] { --bg: #f4ecd8; --panel: #ebe0c4; --ink: #2b2418; --muted: #76664a; --line: #d2c29b; --you: #35659a; --you-ink: #fff;
+    --her: #fbf6e9; --accent: #9a5f14; --accent-ink: #fffaf0; --err: #b2472a;
+    --tok-cmd: #a0520a; --tok-flag: #7b3fb0; --tok-neuron: #0d7a6b; --tok-num: #c0461a; --tok-str: #4b7a1c; --tok-dir: #2c5fc4;
+    --tok-bg: rgba(60,40,10,.07); --cmd-bg: #e6eef7; --shadow: rgba(60,40,10,.18); }
+  [data-skin="midnight"] { --bg: #0a0f1e; --panel: #111a31; --ink: #dfe7ff; --muted: #8b97ba; --line: #24315a; --you: #3657d6; --you-ink: #f3f6ff;
+    --her: #151f3c; --accent: #7aa2ff; --accent-ink: #0a1230; --err: #ff7b8a;
+    --tok-cmd: #ffcb6b; --tok-flag: #d6a6ff; --tok-neuron: #4fe0ee; --tok-num: #ff9d7a; --tok-str: #c3e88d; --tok-dir: #9ec0ff;
+    --tok-bg: rgba(122,162,255,.10); --cmd-bg: #0c1838; --serif: "Iowan Old Style", Georgia, serif; }
+  [data-skin="terminal"] { --bg: #040704; --panel: #081008; --ink: #b9f6b0; --muted: #5d9958; --line: #1b381b; --you: #12471a; --you-ink: #dcffd6;
+    --her: #0a160a; --accent: #3dff6e; --accent-ink: #031a08; --err: #ff6b6b;
+    --tok-cmd: #f9f871; --tok-flag: #ff9be8; --tok-neuron: #5ef1ff; --tok-num: #ffb86c; --tok-str: #e8ffd9; --tok-dir: #8ab4ff;
+    --tok-bg: rgba(61,255,110,.08); --cmd-bg: #021302;
+    --serif: ui-monospace, SFMono-Regular, Menlo, monospace; --sans: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  [data-skin="marble"] { --bg: #ffffff; --panel: #f2f2ef; --ink: #111111; --muted: #4f4f4f; --line: #c9c9c4; --you: #161616; --you-ink: #ffffff;
+    --her: #f7f7f4; --accent: #b3261e; --accent-ink: #ffffff; --err: #b3261e;
+    --tok-cmd: #9a3412; --tok-flag: #6b21a8; --tok-neuron: #0f766e; --tok-num: #b91c1c; --tok-str: #166534; --tok-dir: #1d4ed8;
+    --tok-bg: rgba(0,0,0,.06); --cmd-bg: #f1f5f9; --shadow: rgba(0,0,0,.16); }
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; }
   body { background: var(--bg); color: var(--ink); font: 16px/1.55 var(--sans); display: flex; flex-direction: column; }
@@ -49,7 +69,7 @@
   .msg.assistant .body { flex: 0 1 auto; max-width: 85%; }
   .msg.assistant .text { background: var(--her); border: 1px solid var(--line); padding: 9px 14px; border-radius: 18px 18px 18px 4px; }
   .msg.assistant .text:empty:not(.cursor) { display: none; }
-  .msg.assistant .avatar { background: var(--accent); color: #1b150c; }
+  .msg.assistant .avatar { background: var(--accent); color: var(--accent-ink); }
   .msg.system .avatar { background: var(--line); color: var(--muted); }
   .body { min-width: 0; flex: 1; }
   .who { font-size: 13px; color: var(--muted); margin-bottom: 2px; }
@@ -89,7 +109,7 @@
   /* mirrored, colored copy of the input behind the transparent textarea: typing stays native, text shows colored */
   #hl { position: absolute; inset: 0; margin: 0; color: var(--ink); border-color: transparent; overflow: hidden; pointer-events: none; }
   #hl .tok-cmd { font-weight: inherit; }
-  #send { background: var(--accent); color: #1b150c; border: none; font-weight: 600; height: 46px; padding: 0 18px; border-radius: 12px; }
+  #send { background: var(--accent); color: var(--accent-ink); border: none; font-weight: 600; height: 46px; padding: 0 18px; border-radius: 12px; }
   /* F00002: slash menu */
   .composer { position: relative; flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
   #slash { position: absolute; left: 0; right: 0; bottom: calc(100% + 8px); z-index: 20; background: var(--panel); border: 1px solid var(--line);
@@ -109,19 +129,75 @@
   .arghint { font: 12.5px var(--mono); color: var(--muted); padding: 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .arghint[hidden] { display: none; }
   .arghint .d { font-family: var(--sans); }
+  /* F00007: settings drawer (top right) */
+  .icon { display: inline-grid; place-items: center; width: 36px; height: 34px; padding: 0; }
+  .icon svg { width: 18px; height: 18px; }
+  #backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 40; }
+  #backdrop[hidden] { display: none; }
+  #settings { position: fixed; top: 0; right: 0; bottom: 0; width: min(400px, 100vw); z-index: 41; background: var(--panel); border-left: 1px solid var(--line);
+    box-shadow: -16px 0 48px var(--shadow); transform: translateX(105%); transition: transform .22s ease; overflow-y: auto; }
+  #settings.open { transform: none; }
+  #settings .s-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--line);
+    position: sticky; top: 0; background: var(--panel); z-index: 1; }
+  #settings h2 { font: 600 18px var(--serif); margin: 0; }
+  #settings section { padding: 16px 18px; border-bottom: 1px solid var(--line); }
+  #settings h3 { font: 600 12px var(--sans); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 10px; }
+  #settings label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+  #settings input { background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; font: 14px var(--mono); outline: none; width: 100%; }
+  #settings input:focus { border-color: var(--accent); }
+  .s-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0; }
+  .seg { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .seg button { flex: 1; border: none; border-radius: 0; padding: 7px 0; font: 13px var(--mono); }
+  .seg button.on { background: var(--accent); color: var(--accent-ink); }
+  .s-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  .onduty { font-size: 14px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
+  .onduty b { font-family: var(--serif); font-size: 15px; }
+  .s-note { font-size: 12px; color: var(--muted); margin: 10px 0 0; }
+  .s-err { color: var(--err); font-size: 13px; margin: 8px 0 0; }
+  .skins { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 10px; }
+  /* each card carries its own data-skin, so it previews itself in its own colors and fonts */
+  .skin { padding: 0; overflow: hidden; text-align: left; border-radius: 10px; background: var(--panel); color: var(--ink); font-family: var(--sans); border-color: var(--line); }
+  .skin .sw { height: 54px; display: grid; grid-template-columns: 2fr 1fr 1fr; }
+  .skin .nm { display: block; padding: 6px 9px; font-size: 13px; }
+  .skin.on { outline: 2px solid var(--accent); outline-offset: 1px; }
   .hint { max-width: 820px; margin: -10px auto 0; padding: 0 20px 10px; font-size: 12px; color: var(--muted); }
 </style>
 </head>
 <body>
 <header>
   <div>
-    <h1>The Librarian of Alexandria</h1>
+    <h1 id="title">The Librarian of Alexandria</h1>
     <div class="sub" id="steer">Qwen3-8B · L9 N367 pushed down</div>
   </div>
   <div class="spacer"></div>
   <div class="status"><span class="dot loading" id="dot"></span><span id="status">connecting…</span></div>
   <button id="newchat" title="Forget this conversation">New chat</button>
+  <button id="gear" class="icon" title="Settings (/settings)" aria-label="Settings" aria-controls="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
 </header>
+<div id="backdrop" hidden></div>
+<aside id="settings" aria-label="Settings" aria-hidden="true">
+  <div class="s-head"><h2>Settings</h2><button id="s-close" class="icon" title="Close (Esc)" aria-label="Close">✕</button></div>
+  <section id="s-lib">
+    <h3>Librarian</h3>
+    <div class="onduty" id="s-onduty"></div>
+    <div class="s-grid">
+      <label>Layer <input id="s-L" type="number" min="0" max="35" placeholder="0–35"></label>
+      <label>Neuron <input id="s-N" type="number" min="0" max="12287" placeholder="0–12287"></label>
+      <label>Direction <div class="seg" id="s-dir"><button type="button" data-dir="up">up</button><button type="button" data-dir="down">down</button></div></label>
+      <label>|α| <input id="s-A" type="number" step="0.05" min="0" max="3" placeholder="0.5"></label>
+    </div>
+    <label>…or a filed persona <input id="s-name" list="s-personas" placeholder="e.g. emily, smallpox"></label><datalist id="s-personas"></datalist>
+    <div class="s-actions"><button class="primary" id="s-apply">Make librarian</button><button id="s-default">Restore default</button></div>
+    <div class="s-err" id="s-err"></div>
+    <p class="s-note">Default: L9 N367 down, α −0.4 — the Librarian of Alexandria. Also <span data-hl>/librarian 12:545:up --alpha 0.5</span> · <span data-hl>/librarian default</span></p>
+  </section>
+  <section id="s-skin">
+    <h3>Skin</h3>
+    <div class="skins" id="s-skins"></div>
+    <p class="s-note">Also <span data-hl>/skin parchment</span></p>
+  </section>
+</aside>
 <main id="scroll"><div id="log"></div></main>
 <footer>
   <form id="form">
@@ -129,7 +205,7 @@
     <div id="slash" hidden role="listbox" aria-label="Commands"><div class="head"><span>Commands</span><span id="slash-count"></span></div><div class="list" id="slash-list"></div>
       <div class="foot"><kbd>↑</kbd><kbd>↓</kbd> choose · <kbd>Tab</kbd> or <kbd>Enter</kbd> complete · <kbd>Esc</kbd> close</div></div>
     <div class="arghint" id="arghint" hidden></div>
-    <div class="compose"><div id="hl" aria-hidden="true"></div><textarea id="input" rows="1" spellcheck="false" placeholder="Ask the Librarian…  ( / for commands · Enter sends · Shift+Enter new line )" autofocus></textarea></div>
+    <div class="compose"><div id="hl" aria-hidden="true"></div><textarea id="input" rows="1" spellcheck="false" placeholder="Ask the Librarian…   ( / for commands )" autofocus></textarea></div>
     </div>
     <button id="send" type="submit">Send</button>
   </form>
@@ -148,6 +224,9 @@ const COMMANDS = [
   { name: "inventory", args: "", desc: "tested vs untested cards, next suggestions", aliases: ["inv"] },
   { name: "probe", args: 'L:N[:up|down][:α] [--alpha X] [--prompt "Q"]', desc: "ask “Who are you?” with that neuron alone and file the card" },
   { name: "probe!", args: 'L:N[:up|down] …', desc: "re-probe even if already filed (old reply kept in history)" },
+  { name: "librarian", args: "[L:N:up|down [--alpha X] | NAME | default]", desc: "who keeps the desk: show, swap in another neuron, or restore L9 N367 down" },
+  { name: "settings", args: "", desc: "open settings (librarian, skins, export)" },
+  { name: "skin", args: "[alexandria|parchment|midnight|terminal|marble]", desc: "change the look of the Library", aliases: ["theme"] },
   { name: "reset", args: "", desc: "forget this conversation (the catalogue stays)" },
 ];
 const KNOWN_CMDS = new Set(COMMANDS.flatMap(c => [c.name.replace(/!$/, ""), ...(c.aliases || [])]));
@@ -187,6 +266,31 @@ function highlight(text, cmdMode) {
   flush();
   return out;
 }
+// ---------------------------------------------------------------- prefs: F00006/F00007 voice, F00009 skin
+const PREFS_KEY = "living-library-prefs";
+let prefs = Object.assign({ voice: null, skin: "alexandria" }, JSON.parse(localStorage.getItem(PREFS_KEY) || "{}"));
+const savePrefs = () => localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+const DEFAULT_VOICE = { layer: 9, neuron: 367, direction: "down", alpha: 0.4, name: "the Librarian of Alexandria" };
+const voice = () => prefs.voice || DEFAULT_VOICE;
+const signedA = (v) => (v.direction === "up" ? 1 : -1) * Math.abs(v.alpha);
+const fmtA = (a) => (a >= 0 ? "+" : "−") + Math.abs(+a).toFixed(2).replace(/0$/, "");
+const voiceLabel = (v) => `L${v.layer} N${v.neuron} ${v.direction} α=${fmtA(signedA(v))}`;
+const SKINS = [
+  { id: "alexandria", name: "Alexandria", sw: ["#15120e", "#d4a24c", "#2f5d8a"] },
+  { id: "parchment", name: "Parchment", sw: ["#f4ecd8", "#9a5f14", "#35659a"] },
+  { id: "midnight", name: "Midnight", sw: ["#0a0f1e", "#7aa2ff", "#3657d6"] },
+  { id: "terminal", name: "Terminal", sw: ["#040704", "#3dff6e", "#12471a"] },
+  { id: "marble", name: "Marble", sw: ["#ffffff", "#b3261e", "#161616"] },
+];
+function applySkin(id) {
+  if (!SKINS.some(k => k.id === id)) throw new Error(`no skin “${id}” — try ${SKINS.map(k => k.id).join(", ")}`);
+  prefs.skin = id; savePrefs(); document.documentElement.dataset.skin = id; renderSkins();
+}
+function renderSkins() {
+  const box = document.getElementById("s-skins"); if (!box) return;
+  box.innerHTML = SKINS.map(k => `<button type="button" class="skin${prefs.skin === k.id ? " on" : ""}" data-skin="${k.id}" aria-pressed="${prefs.skin === k.id}">` +
+    `<span class="sw">${k.sw.map(c => `<i style="background:${c}"></i>`).join("")}</span><span class="nm">${k.name}</span></button>`).join("");
+}
 const isCmdLine = (t) => /^\s*\//.test(t);
 function paint(el, text, cmdMode) { el.innerHTML = highlight(text, cmdMode); el.classList.add("prose"); }
 
@@ -213,11 +317,12 @@ function setThoughts(el, thoughts, label, live) {
   d.querySelector(".thought-text").textContent = thoughts || "";
 }
 
-function bubble(role, text, meta, thoughts, label, isCmd) {
+const librarianWho = () => prefs.voice ? `Librarian · ${prefs.voice.name}` : "Librarian";
+function bubble(role, text, meta, thoughts, label, isCmd, who) {
   const empty = log.querySelector(".empty"); if (empty) empty.remove();
   const el = document.createElement("div");
   el.className = "msg " + role;
-  const name = role === "user" ? "You" : role === "assistant" ? "Librarian" : role === "error" ? "Error" : "Catalogue";
+  const name = role === "user" ? "You" : role === "assistant" ? (who || librarianWho()) : role === "error" ? "Error" : "Catalogue";
   const think = role === "assistant" ? `<details class="thoughts" hidden><summary><span>Thoughts</span></summary><div class="thought-text"></div></details>` : "";
   el.innerHTML = `<div class="avatar"></div><div class="body"><div class="who"></div>${think}<div class="text"></div><div class="meta"></div></div>`;
   el.querySelector(".avatar").textContent = role === "user" ? "Y" : role === "assistant" ? "L" : "§";
@@ -237,7 +342,7 @@ function renderAll() {
     log.innerHTML = `<div class="empty"><h2>Welcome to the Library.</h2>
       <p>The chief librarian keeps the catalogue of neuron personas.<br>Ask her anything — or press <b>/</b> and try ${highlight("/find coffee", true)}, ${highlight("/inventory", true)}, ${highlight("/probe 12:545:up --alpha 0.5", true)}.</p></div>`;
   }
-  for (const m of state.messages) bubble(m.role, m.content, m.meta, m.thoughts, thoughtLabel(m), m.cmd);
+  for (const m of state.messages) bubble(m.role, m.content, m.meta, m.thoughts, thoughtLabel(m), m.cmd, m.who);
   toBottom();
 }
 
@@ -249,8 +354,8 @@ async function health() {
     try { h = await (await fetch("/api/health", { cache: "no-store", signal: ctl.signal })).json(); }
     finally { clearTimeout(tid); }
     const a = h.librarian;
-    const extra = (h.extra_steers || []).map(s => " + " + s.label).join("");
-    $("steer").textContent = `${h.model} · L${a.layer} N${a.neuron} ${a.direction} α=${a.alpha}${extra}`;
+    DEFAULT_VOICE.alpha = Math.abs(a.alpha); serverInfo = h;
+    renderHeader();
     $("dot").className = "dot " + (h.ready ? "ready" : h.error ? "error" : "loading");
     $("status").textContent = h.ready ? "ready" : h.error ? h.error : "loading model…";
     if (!h.ready && !h.error) setTimeout(health, 2000);
@@ -259,6 +364,14 @@ async function health() {
   }
 }
 
+let serverInfo = null;
+function renderHeader() {
+  const v = voice(), h = serverInfo;
+  const extra = h ? (h.extra_steers || []).map(s => " + " + s.label).join("") : "";
+  $("title").textContent = prefs.voice ? `The Librarian · ${v.name}` : "The Librarian of Alexandria";
+  $("steer").textContent = `${h ? h.model : "Qwen3-8B"} · ${voiceLabel(v)}${extra}`;
+  renderOnDuty();
+}
 function setBusy(b) { busy = b; sendBtn.disabled = b; }
 
 async function sendChat(text) {
@@ -271,7 +384,9 @@ async function sendChat(text) {
   her.querySelector(".meta").textContent = "thinking…";
   // always send our history: the page is the source of truth, so a server restart, an
   // aborted stream, or a retried message can never leave her with a doubled or stale turn
-  const body = { message: text, session_id: state.session_id, history };
+  const body = { message: text, session_id: state.session_id, history,
+                 voice: prefs.voice ? { layer: prefs.voice.layer, neuron: prefs.voice.neuron, direction: prefs.voice.direction,
+                                        alpha: prefs.voice.alpha, name: prefs.voice.name } : null };
   let thought = "", spill = "", done = null, t0 = Date.now(), tEnd = null;
   const allThoughts = () => [thought.trim(), spill.trim()].filter(Boolean).join("\n\n");
   try {
@@ -317,7 +432,7 @@ async function sendChat(text) {
     paint(t, done.reply, false);
     const meta = `${done.n_tokens} tokens${done.stopped_on_repeat ? " · stopped on repeat" : ""}`;
     her.querySelector(".meta").textContent = meta;
-    const msg = { role: "assistant", content: done.reply, meta };
+    const msg = { role: "assistant", content: done.reply, meta, who: librarianWho(), steers: (done.steers || []).map(x => x.label) };
     if (done.thoughts) {
       msg.thoughts = done.thoughts;
       msg.thought_secs = Math.max(1, Math.round(((tEnd || Date.now()) - t0) / 1000));
@@ -393,6 +508,15 @@ async function command(line) {
       if (!r.ok) throw new Error(await r.text());
       const j = await r.json();
       sys(j.results.map(x => `${x.status}${x.alpha != null ? ` (${x.direction} |α|=${x.alpha})` : ""}${x.prompt && x.prompt !== "Who are you?" ? ` Q: “${x.prompt}”` : ""}: ${x.entry ? x.entry.card : x.suggested_persona}\n    ${(x.reply || (x.entry && x.entry.reply) || "").replace(/\s+/g, " ").slice(0, 400)}`).join("\n\n"));
+    } else if (cmd === "librarian") {
+      if (!rest) sys(`On duty: ${voice().name} — ${voiceLabel(voice())}${prefs.voice ? "  (/librarian default restores L9 N367 down)" : "  (the default)"}`);
+      else if (/^(default|reset|restore)$/i.test(rest)) setVoice(null);
+      else setVoice(await resolveVoice(rest));
+    } else if (cmd === "settings") {
+      openSettings();
+    } else if (cmd === "skin" || cmd === "theme") {
+      if (!rest) sys("skins: " + SKINS.map(k => (k.id === prefs.skin ? "▸ " : "") + k.id).join(" · "));
+      else { applySkin(rest.toLowerCase()); sys(`skin: ${rest.toLowerCase()}`); }
     } else if (cmd === "reset") {
       await resetChat();
     } else {
@@ -400,6 +524,65 @@ async function command(line) {
     }
   } catch (e) { bubble("error", String(e.message || e)); toBottom(); }
 }
+
+// ---------------------------------------------------------------- F00006: change the librarian's persona
+async function resolve(spec, extra) {
+  const r = await fetch("/api/resolve", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ spec, ...(extra || {}) }) });
+  if (!r.ok) { let d = await r.text(); try { d = JSON.parse(d).detail || d; } catch (e) {} throw new Error(d); }
+  return r.json();
+}
+async function resolveVoice(spec) {
+  const r = await resolve(spec, { default_alpha: 0.75, card_alpha: false });
+  if (r.members.length !== 1) throw new Error("the librarian is one neuron — name exactly one (e.g. /librarian 12:545:up)");
+  const m = r.members[0];
+  return { layer: m.layer, neuron: m.neuron, direction: m.direction, alpha: m.alpha, name: m.persona || m.label };
+}
+function setVoice(v) {
+  const isDefault = !v || (v.layer === 9 && v.neuron === 367 && v.direction === "down" && Math.abs(v.alpha - DEFAULT_VOICE.alpha) < 1e-9);
+  prefs.voice = isDefault ? null : v; savePrefs(); renderHeader();
+  sys(prefs.voice ? `The desk is now kept by ${v.name} — ${voiceLabel(v)}. (/librarian default restores the Librarian of Alexandria)`
+                  : `The Librarian of Alexandria is back at her desk — ${voiceLabel(DEFAULT_VOICE)}.`);
+}
+
+// ---------------------------------------------------------------- F00007: settings drawer
+const drawer = $("settings"), backdrop = $("backdrop");
+let sDir = "down";
+function setDirBtn(d) { sDir = d; document.querySelectorAll("#s-dir button").forEach(b => b.classList.toggle("on", b.dataset.dir === d)); }
+function renderOnDuty() {
+  const v = voice(); if (!$("s-onduty")) return;
+  $("s-onduty").innerHTML = `On duty: <b>${esc(v.name)}</b><br>${highlight(voiceLabel(v), false)}${prefs.voice ? "" : " · default"}`;
+}
+async function openSettings() {
+  const v = voice();
+  $("s-L").value = v.layer; $("s-N").value = v.neuron; $("s-A").value = v.alpha; $("s-name").value = ""; setDirBtn(v.direction);
+  $("s-A").dataset.touched = "";
+  $("s-err").textContent = ""; renderOnDuty(); renderSkins();
+  drawer.classList.add("open"); drawer.setAttribute("aria-hidden", "false"); backdrop.hidden = false;
+  setTimeout(() => $("s-close").focus(), 50);
+  try {   // filed persona names for the picker
+    const r = await (await fetch("/api/recent?k=500")).json();
+    const names = [...new Set(r.results.map(e => e.persona).filter(p => p && !p.startsWith("?")))];
+    $("s-personas").innerHTML = names.map(n => `<option value="${esc(n)}">`).join("");
+  } catch (e) {}
+}
+function closeSettings() { drawer.classList.remove("open"); drawer.setAttribute("aria-hidden", "true"); backdrop.hidden = true; input.focus(); }
+$("gear").addEventListener("click", () => drawer.classList.contains("open") ? closeSettings() : openSettings());
+$("s-close").addEventListener("click", closeSettings);
+backdrop.addEventListener("click", closeSettings);
+document.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && drawer.classList.contains("open")) { ev.preventDefault(); closeSettings(); } });
+$("s-A").addEventListener("input", () => { $("s-A").dataset.touched = "1"; });
+document.querySelectorAll("#s-dir button").forEach(b => b.addEventListener("click", () => setDirBtn(b.dataset.dir)));
+$("s-apply").addEventListener("click", async () => {
+  $("s-err").textContent = "";
+  try {
+    const name = $("s-name").value.trim(), A = $("s-A").value.trim();
+    const spec = name ? name + (A && $("s-A").dataset.touched ? ` --alpha ${A}` : "")
+                      : `${$("s-L").value}:${$("s-N").value}:${sDir}${A ? ":" + A : ""}`;
+    setVoice(await resolveVoice(spec)); openSettings();
+  } catch (e) { $("s-err").textContent = String(e.message || e); }
+});
+$("s-default").addEventListener("click", () => { setVoice(null); openSettings(); });
+$("s-skins").addEventListener("click", (ev) => { const b = ev.target.closest(".skin"); if (b) applySkin(b.dataset.skin); });
 
 async function resetChat() {
   if (state.session_id) {
@@ -494,7 +677,7 @@ function menuKey(ev) {   // true when the menu consumed the key
   else if (ev.key === "Tab") completeMenu();
   else if (ev.key === "Enter" && !ev.shiftKey) {
     const q = menuQuery(), c = menu.items[menu.sel];
-    if (c && (c.name === q || (c.aliases || []).includes(q)) && !c.args) { closeMenu(); return false; }   // "/help⏎" just sends
+    if (COMMANDS.some(x => x.name === q || (x.aliases || []).includes(q))) { closeMenu(); return false; }   // an exact command + Enter just sends
     completeMenu(undefined, true);
   }
   else if (ev.key === "Escape") { menu.dismissed = input.value; closeMenu(); renderArgHint(); }
@@ -547,6 +730,7 @@ document.querySelectorAll("[data-hl]").forEach(el => { el.innerHTML = highlight(
 $("newchat").addEventListener("click", () => { if (!busy) resetChat(); });
 
 renderAll();
+renderHeader();
 health();
 </script>
 </body>

@@ -2,10 +2,10 @@
 
 | Field | Value |
 |-------|-------|
-| State | Planned |
+| State | Verified (pre-MVP) |
 | Stage | pre-MVP |
 | Created | 2026-10-28 |
-| Verified | pending |
+| Verified | 2026-10-28 14:05 America/New_York — headless Chrome: ⚙ (top right) opens the drawer; Esc, ✕, backdrop and /settings open/close it; Make librarian by L/N/dir/α and by filed persona name; Restore default → L9 N367 down α −0.4 |
 | Owner | arcane dealer + Grok Bot |
 | Class | settings |
 | Lineage | Owner brief 2026-10-28, item 7 ("settings in the top right lets users change the librarian to a new neuron, or return to default") |
@@ -24,9 +24,10 @@ also the home for Export (F00008) and Skins (F00009).
   "Restore default". Changes post a catalogue note in the Librarian tab.
 
 ## Acceptance / Verification
-- [ ] ⚙ opens/closes the drawer (button, Esc, backdrop, `/settings`).
-- [ ] Setting L/N/dir/α changes the Librarian voice (same effect as `/librarian`), persists across reload.
-- [ ] Restore default returns to L9 N367 down α −0.4.
+- [x] ⚙ opens/closes the drawer (button, Esc, backdrop, `/settings`).
+- [x] Setting L/N/dir/α changes the Librarian voice (same effect as `/librarian`), persists across reload.
+- [x] Restore default returns to L9 N367 down α −0.4.
 
 ## Status log
 - 2026-10-28 — created from the owner's brief.
+- 2026-10-28 14:05 — implemented and verified: headless Chrome: ⚙ (top right) opens the drawer; Esc, ✕, backdrop and /settings open/close it; Make librarian by L/N/dir/α and by filed persona name; Restore default → L9 N367 down α −0.4

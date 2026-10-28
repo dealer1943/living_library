@@ -47,6 +47,18 @@ SYSTEM_PROMPT = (
     "in the first person, in two to four sentences."
 )
 DEFAULT_THINK_BUDGET = 512
+DEFAULT_VOICE_NAME = "the Librarian of Alexandria"
+
+
+def system_prompt(voice: Steer | None = None, name: str | None = None) -> str:
+    """:data:`SYSTEM_PROMPT` for whoever is behind the desk (F00006). The default voice gets the
+    original text; another neuron is told which card it is and that it now serves as chief librarian."""
+    if voice is None or (voice.layer, voice.neuron, direction_of(voice.alpha)) == LIBRARIAN and not name:
+        return SYSTEM_PROMPT
+    d = direction_of(voice.alpha)
+    who = f"layer {voice.layer}, neuron {voice.neuron}, pushed {d}" + (f": {name}" if name else "")
+    return SYSTEM_PROMPT.replace("You are layer 9, neuron 367, pushed down: the Librarian of Alexandria.",
+                                 f"You are {who}, and you now serve as the chief librarian.")
 
 HELP = """\
 probing & filing
@@ -208,7 +220,9 @@ class LibrarianSession:
         self.lib = lib
         self.model = model
         self.backend = backend
-        self.voice_steer = Steer(LIBRARIAN[0], LIBRARIAN[1], -abs(librarian_alpha))
+        self.default_voice = Steer(LIBRARIAN[0], LIBRARIAN[1], -abs(librarian_alpha))
+        self.voice_steer = self.default_voice
+        self.voice_name: str | None = None
         self.extra: list[Steer] = list(extra or [])
         self.history: list[Message] = []
         self.context = context
@@ -229,7 +243,7 @@ class LibrarianSession:
 
     def fork(self) -> "LibrarianSession":
         """A fresh conversation sharing the model, catalogue and settings."""
-        s = LibrarianSession(self.lab, self.lib, self.model, self.backend, librarian_alpha=abs(self.voice_steer.alpha),
+        s = LibrarianSession(self.lab, self.lib, self.model, self.backend, librarian_alpha=abs(self.default_voice.alpha),
                              extra=self.extra, context=self.context, max_new_tokens=self.max_new_tokens,
                              temperature=self.temperature, top_p=self.top_p, repeat_stop=self.repeat_stop,
                              think_budget=self.think_budget)
@@ -238,6 +252,15 @@ class LibrarianSession:
     @property
     def steers(self) -> list[Steer]:
         return [self.voice_steer, *self.extra]
+
+    def set_voice(self, steer: Steer | None = None, name: str | None = None) -> Steer:
+        """Put another neuron behind the librarian's desk (F00006); None restores L9 N367 down."""
+        if steer is None:
+            self.voice_steer, self.voice_name = self.default_voice, None
+        else:
+            self.lab.validate([steer])
+            self.voice_steer, self.voice_name = steer, (name or None)
+        return self.voice_steer
 
     def generate(self, messages: list[Message], steers: list[Steer], max_new_tokens: int | None = None,
                  on_text: Callable[[str], None] | None = None, think_budget: int = 0,
@@ -262,7 +285,7 @@ class LibrarianSession:
 
     def system(self) -> list[Message]:
         """Who she is (:data:`SYSTEM_PROMPT`), plus the catalogue note unless context is off."""
-        text = SYSTEM_PROMPT + (" " + self.catalogue_note() if self.context else "")
+        text = system_prompt(self.voice_steer, self.voice_name) + (" " + self.catalogue_note() if self.context else "")
         return [{"role": "system", "content": text}]
 
     def chat(self, message: str, on_text: Callable[[str], None] | None = None,
