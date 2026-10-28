@@ -12,6 +12,10 @@ Plain lines (no slash) are a conversation *with the librarian*: generated with o
 L9:367:down (plus any ``/add`` extras) active, and, unless ``/context off``, a short
 system note telling her what the catalogue holds. Probes never include her steer:
 each probe runs the probed neuron alone.
+
+:class:`LibrarianSession` holds the model-facing state (her steer, chat history,
+catalogue note, probing) without any terminal I/O; the REPL (:class:`Librarian`) and
+the web chat (:mod:`neuron_steer.web`) both drive one.
 """
 
 from __future__ import annotations
@@ -19,9 +23,11 @@ from __future__ import annotations
 import argparse
 import random
 import sys
+from dataclasses import dataclass
 from typing import Callable
 
 from .library import (LIBRARIAN, Entry, Library, direction_of, guess_weirdness, suggest_persona)
+from .steer import GenerationResult
 from .prompts import DEFAULT_PROMPT, Message
 from .steer import Steer, parse_steer
 
@@ -71,6 +77,119 @@ def _parse_target(rest: str) -> tuple[int, int, list[tuple[str, float | None]]]:
     return L, N, [_parse_dir(parts[2])]
 
 
+@dataclass
+class ProbeResult:
+    """One un-filed probe: the steer pushed, the reply, and a suggested persona name."""
+    layer: int
+    neuron: int
+    direction: str
+    alpha: float
+    steer: Steer
+    result: GenerationResult
+    persona: str
+
+
+class LibrarianSession:
+    """The Librarian of Alexandria without a terminal: her voice (L9:367:down at
+    ``librarian_alpha``), any extra steers, a chat history, the catalogue note, and probing.
+
+    Shared by the stdin REPL and the web server. Not thread-safe: callers serialise
+    access (the web server runs every model call on one worker thread).
+    """
+
+    def __init__(self, lab, lib: Library, model: str, backend: str = "mlx", *,
+                 librarian_alpha: float = 0.75, extra: list[Steer] | None = None,
+                 context: bool = True, max_new_tokens: int = 160, temperature: float = 0.0,
+                 top_p: float = 1.0, repeat_stop: bool = True):
+        self.lab = lab
+        self.lib = lib
+        self.model = model
+        self.backend = backend
+        self.voice_steer = Steer(LIBRARIAN[0], LIBRARIAN[1], -abs(librarian_alpha))
+        self.extra: list[Steer] = list(extra or [])
+        self.history: list[Message] = []
+        self.context = context
+        self.max_new_tokens = max_new_tokens
+        self.temperature = temperature
+        self.top_p = top_p
+        self.repeat_stop = repeat_stop
+
+    @classmethod
+    def from_args(cls, lab, lib: Library, args: argparse.Namespace) -> "LibrarianSession":
+        return cls(lab, lib, args.model, args.backend, librarian_alpha=args.librarian_alpha,
+                   extra=getattr(args, "extra_steers", None), context=not args.no_context,
+                   max_new_tokens=args.max_new_tokens, temperature=args.temperature,
+                   top_p=args.top_p, repeat_stop=not args.no_repeat_stop)
+
+    def fork(self) -> "LibrarianSession":
+        """A fresh conversation sharing the model, catalogue and settings."""
+        s = LibrarianSession(self.lab, self.lib, self.model, self.backend, librarian_alpha=abs(self.voice_steer.alpha),
+                             extra=self.extra, context=self.context, max_new_tokens=self.max_new_tokens,
+                             temperature=self.temperature, top_p=self.top_p, repeat_stop=self.repeat_stop)
+        return s
+
+    @property
+    def steers(self) -> list[Steer]:
+        return [self.voice_steer, *self.extra]
+
+    def generate(self, messages: list[Message], steers: list[Steer], max_new_tokens: int | None = None,
+                 on_text: Callable[[str], None] | None = None) -> GenerationResult:
+        kw = dict(max_new_tokens=max_new_tokens or self.max_new_tokens, temperature=self.temperature,
+                  top_p=self.top_p, repeat_stop=self.repeat_stop)
+        if on_text is not None and getattr(self.lab, "supports_streaming", False):
+            kw["on_text"] = on_text
+        return self.lab.generate(messages, steers, **kw)
+
+    def system(self) -> list[Message]:
+        """Short catalogue note so she knows what is on the shelves (empty if context is off)."""
+        if not self.context:
+            return []
+        inv = self.lib.inventory(self.model)
+        recent = self.lib.recent(12, model=self.model)
+        shelf = "; ".join(f"{e.layer}:{e.neuron}:{e.direction} = {e.persona}" for e in recent) or "nothing yet"
+        return [{"role": "system", "content":
+                 f"Catalogue of neuron personas: {inv.tested} cards filed "
+                 f"({inv.tested_up} up, {inv.tested_down} down) of {inv.total:,}. Recent cards: {shelf}."}]
+
+    def chat(self, message: str, on_text: Callable[[str], None] | None = None) -> GenerationResult:
+        """One turn with her voice (L9:367:down + extras) active; appends both sides to history."""
+        self.history.append({"role": "user", "content": message})
+        try:
+            res = self.generate(self.system() + self.history, self.steers, on_text=on_text)
+        except Exception:
+            self.history.pop()
+            raise
+        self.history.append({"role": "assistant", "content": res.text})
+        return res
+
+    def reset(self) -> None:
+        self.history.clear()
+
+    def probe(self, L: int, N: int, direction: str, alpha: float) -> ProbeResult:
+        """Push (L, N, direction) alone — never with her voice — and ask "Who are you?"."""
+        alpha = abs(alpha)
+        steer = Steer(L, N, alpha if direction == "up" else -alpha)
+        self.lab.validate([steer])
+        res = self.generate([{"role": "user", "content": DEFAULT_PROMPT}], [steer])
+        persona = suggest_persona(res.text)
+        if (L, N, direction) == LIBRARIAN and "librar" in res.text.lower():
+            persona = "chief librarian"
+        return ProbeResult(L, N, direction, alpha, steer, res, persona)
+
+    def file(self, p: ProbeResult, persona: str | None = None, tags: list[str] | None = None) -> Entry:
+        r = p.result
+        return self.lib.file_persona(Entry(
+            layer=p.layer, neuron=p.neuron, direction=p.direction, alpha=p.alpha, reply=r.text,
+            persona=persona or p.persona, model=self.model, backend=self.backend, prompt=DEFAULT_PROMPT,
+            tags=list(tags or []), weirdness=guess_weirdness(r.text, r.stopped_on_repeat),
+            stopped_on_repeat=r.stopped_on_repeat, n_tokens=r.n_new_tokens))
+
+    def remark(self, e: Entry) -> GenerationResult:
+        msg = (f"A new card was just filed: {e.key} identifies as “{e.persona}”. "
+               f"It said: {e.reply[:300]!r}. In one sentence, as the chief librarian, note it for the catalogue.")
+        return self.generate([{"role": "user", "content": msg}], [self.voice_steer], max_new_tokens=60)
+
+
 class Librarian:
     def __init__(self, lab, lib: Library, args: argparse.Namespace,
                  out: Callable[[str], None] = print, ask: Callable[[str], str] = input):
@@ -82,14 +201,36 @@ class Librarian:
         self.say_raw = out
         self.ask = ask
         self.alpha = abs(args.alpha)
-        self.voice_steer = Steer(LIBRARIAN[0], LIBRARIAN[1], -abs(args.librarian_alpha))
-        self.extra: list[Steer] = list(getattr(args, "extra_steers", []) or [])
-        self.history: list[Message] = []
-        self.context = not args.no_context
+        self.session = LibrarianSession.from_args(lab, lib, args)
         self.voice = args.voice
         self.auto_file = args.auto_file
         self.rng = random.Random(args.seed)
         lib.n_layers, lib.n_neurons = lab.n_layers, lab.n_neurons
+
+    # state lives on the session (shared with the web chat)
+    @property
+    def voice_steer(self) -> Steer:
+        return self.session.voice_steer
+
+    @property
+    def extra(self) -> list[Steer]:
+        return self.session.extra
+
+    @extra.setter
+    def extra(self, v: list[Steer]) -> None:
+        self.session.extra = v
+
+    @property
+    def history(self) -> list[Message]:
+        return self.session.history
+
+    @property
+    def context(self) -> bool:
+        return self.session.context
+
+    @context.setter
+    def context(self, v: bool) -> None:
+        self.session.context = v
 
     # -- output helpers -----------------------------------------------------------------
 
@@ -97,9 +238,7 @@ class Librarian:
         self.say_raw(f"{LIB} {msg}")
 
     def _gen(self, messages: list[Message], steers: list[Steer], max_new_tokens: int | None = None):
-        a = self.args
-        return self.lab.generate(messages, steers, max_new_tokens=max_new_tokens or a.max_new_tokens,
-                                 temperature=a.temperature, top_p=a.top_p, repeat_stop=not a.no_repeat_stop)
+        return self.session.generate(messages, steers, max_new_tokens=max_new_tokens)
 
     # -- probing ----------------------------------------------------------------------------
 
@@ -109,16 +248,12 @@ class Librarian:
         if old and not force:
             self.say(f"already on the shelf (use /probe! to re-probe):\n  {old.card(width=160)}")
             return old
-        steer = Steer(L, N, alpha if direction == "up" else -alpha)
-        self.lab.validate([steer])
-        self.say(f"pushing {steer} and asking {DEFAULT_PROMPT!r} …")
-        res = self._gen([{"role": "user", "content": DEFAULT_PROMPT}], [steer])
+        self.say(f"pushing {Steer(L, N, alpha if direction == 'up' else -alpha)} and asking {DEFAULT_PROMPT!r} …")
+        p = self.session.probe(L, N, direction, alpha)
+        steer, res, persona = p.steer, p.result, p.persona
         rep = " [stopped: exact repeat]" if res.stopped_on_repeat else ""
         self.say_raw(f"\n  ── {steer.layer}:{steer.neuron}:{direction} ({res.n_new_tokens} tokens){rep} ──")
         self.say_raw("  " + res.text.replace("\n", "\n  ") + "\n")
-        persona = suggest_persona(res.text)
-        if (L, N, direction) == LIBRARIAN and "librar" in res.text.lower():
-            persona = "chief librarian"
         tags: list[str] = []
         if not self.auto_file:
             ans = self.ask(f"{LIB} file as “{persona}”? [enter = yes · type a name (#tags ok) · s = skip] ").strip()
@@ -130,21 +265,14 @@ class Librarian:
                 tags = [w[1:] for w in words if w.startswith("#") and len(w) > 1]
                 name = " ".join(w for w in words if not w.startswith("#"))
                 persona = name or persona
-        e = self.lib.file_persona(Entry(
-            layer=L, neuron=N, direction=direction, alpha=alpha, reply=res.text, persona=persona,
-            model=self.model, backend=self.backend, prompt=DEFAULT_PROMPT, tags=tags,
-            weirdness=guess_weirdness(res.text, res.stopped_on_repeat),
-            stopped_on_repeat=res.stopped_on_repeat, n_tokens=res.n_new_tokens))
+        e = self.session.file(p, persona=persona, tags=tags)
         self.say(f"filed {e.key} under “{e.persona}”." + (" (replaced the old card)" if old else ""))
         if self.voice:
             self.remark(e)
         return e
 
     def remark(self, e: Entry) -> None:
-        msg = (f"A new card was just filed: {e.key} identifies as “{e.persona}”. "
-               f"It said: {e.reply[:300]!r}. In one sentence, as the chief librarian, note it for the catalogue.")
-        res = self._gen([{"role": "user", "content": msg}], [self.voice_steer], max_new_tokens=60)
-        self.say_raw(f"{LIB} (aloud) {res.text}")
+        self.say_raw(f"{LIB} (aloud) {self.session.remark(e).text}")
 
     # -- catalogue views -------------------------------------------------------------------
 
@@ -190,20 +318,8 @@ class Librarian:
 
     # -- chat with the librarian ---------------------------------------------------------------
 
-    def _system(self) -> list[Message]:
-        if not self.context:
-            return []
-        inv = self.lib.inventory(self.model)
-        recent = self.lib.recent(12, model=self.model)
-        shelf = "; ".join(f"{e.layer}:{e.neuron}:{e.direction} = {e.persona}" for e in recent) or "nothing yet"
-        return [{"role": "system", "content":
-                 f"Catalogue of neuron personas: {inv.tested} cards filed "
-                 f"({inv.tested_up} up, {inv.tested_down} down) of {inv.total:,}. Recent cards: {shelf}."}]
-
     def chat(self, line: str) -> None:
-        self.history.append({"role": "user", "content": line})
-        res = self._gen(self._system() + self.history, [self.voice_steer, *self.extra])
-        self.history.append({"role": "assistant", "content": res.text})
+        res = self.session.chat(line)
         self.say_raw(f"\n{LIB} {res.text}")
 
     def print_steers(self) -> None:

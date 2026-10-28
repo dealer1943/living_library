@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Librarian of Alexandria</title>
+<style>
+  :root {
+    --bg: #15120e; --panel: #1e1a14; --ink: #ece3d0; --muted: #a39780; --line: #3a3226;
+    --you: #2c3a4a; --her: #2a2318; --accent: #d4a24c; --err: #e07a5f;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--bg); color: var(--ink); font: 16px/1.55 var(--sans); display: flex; flex-direction: column; }
+  header { display: flex; align-items: center; gap: 14px; padding: 12px 20px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  header h1 { font: 600 19px var(--serif); margin: 0; letter-spacing: .2px; }
+  header .sub { color: var(--muted); font-size: 13px; }
+  header .spacer { flex: 1; }
+  .status { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: #777; }
+  .dot.ready { background: #7bbf6a; } .dot.loading { background: var(--accent); animation: pulse 1.2s infinite; } .dot.error { background: var(--err); }
+  @keyframes pulse { 50% { opacity: .35; } }
+  button { background: transparent; color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; font: 14px var(--sans); cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button:disabled { opacity: .45; cursor: default; }
+  main { flex: 1; overflow-y: auto; }
+  #log { max-width: 820px; margin: 0 auto; padding: 24px 20px 12px; }
+  .msg { display: flex; gap: 12px; margin: 0 0 20px; }
+  .avatar { flex: none; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font: 600 14px var(--serif); }
+  .msg.user .avatar { background: var(--you); }
+  .msg.assistant .avatar { background: var(--accent); color: #1b150c; }
+  .msg.system .avatar { background: var(--line); color: var(--muted); }
+  .body { min-width: 0; flex: 1; }
+  .who { font-size: 13px; color: var(--muted); margin-bottom: 2px; }
+  .msg.assistant .who { color: var(--accent); font-family: var(--serif); font-size: 14px; }
+  .text { white-space: pre-wrap; word-wrap: break-word; }
+  .msg.assistant .text { font-family: var(--serif); font-size: 17px; }
+  .msg.system .text { font: 13px/1.5 var(--mono); color: var(--muted); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; overflow-x: auto; }
+  .msg.error .text { color: var(--err); }
+  .meta { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .cursor::after { content: "▍"; color: var(--accent); animation: pulse 1s infinite; }
+  .empty { text-align: center; color: var(--muted); margin-top: 12vh; font-family: var(--serif); }
+  .empty h2 { font-weight: 500; color: var(--ink); }
+  .empty code { font-family: var(--mono); font-size: 13px; color: var(--accent); }
+  footer { border-top: 1px solid var(--line); background: var(--panel); }
+  form { max-width: 820px; margin: 0 auto; padding: 14px 20px 18px; display: flex; gap: 10px; align-items: flex-end; }
+  textarea { flex: 1; resize: none; max-height: 200px; min-height: 46px; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 12px; padding: 11px 14px; font: 16px/1.4 var(--sans); outline: none; }
+  textarea:focus { border-color: var(--accent); }
+  #send { background: var(--accent); color: #1b150c; border: none; font-weight: 600; height: 46px; padding: 0 18px; border-radius: 12px; }
+  .hint { max-width: 820px; margin: -10px auto 0; padding: 0 20px 10px; font-size: 12px; color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>The Librarian of Alexandria</h1>
+    <div class="sub" id="steer">Qwen3-8B · L9 N367 pushed down</div>
+  </div>
+  <div class="spacer"></div>
+  <div class="status"><span class="dot loading" id="dot"></span><span id="status">connecting…</span></div>
+  <button id="newchat" title="Forget this conversation">New chat</button>
+</header>
+<main id="scroll"><div id="log"></div></main>
+<footer>
+  <form id="form">
+    <textarea id="input" rows="1" placeholder="Ask the Librarian…" autofocus></textarea>
+    <button id="send" type="submit">Send</button>
+  </form>
+  <div class="hint">Enter to send · Shift+Enter for a new line · <code>/find</code> <code>/inventory</code> <code>/probe L:N[:up|down]</code> <code>/help</code></div>
+</footer>
+<script>
+const $ = (id) => document.getElementById(id);
+const log = $("log"), scroller = $("scroll"), input = $("input"), sendBtn = $("send");
+const KEY = "librarian-chat-v1";
+let state = JSON.parse(localStorage.getItem(KEY) || "null") || { session_id: null, messages: [] };
+let seeded = false;   // re-send our history once per page load (server may have restarted)
+let busy = false;
+
+const save = () => localStorage.setItem(KEY, JSON.stringify(state));
+const atBottom = () => scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 80;
+const toBottom = () => { scroller.scrollTop = scroller.scrollHeight; };
+
+function bubble(role, text, meta) {
+  const empty = log.querySelector(".empty"); if (empty) empty.remove();
+  const el = document.createElement("div");
+  el.className = "msg " + role;
+  const name = role === "user" ? "You" : role === "assistant" ? "Librarian" : role === "error" ? "Error" : "Catalogue";
+  el.innerHTML = `<div class="avatar"></div><div class="body"><div class="who"></div><div class="text"></div><div class="meta"></div></div>`;
+  el.querySelector(".avatar").textContent = role === "user" ? "Y" : role === "assistant" ? "L" : "§";
+  el.querySelector(".who").textContent = name;
+  el.querySelector(".text").textContent = text;
+  el.querySelector(".meta").textContent = meta || "";
+  if (role === "error") el.classList.add("system");
+  log.appendChild(el);
+  return el;
+}
+
+function renderAll() {
+  log.innerHTML = "";
+  if (!state.messages.length) {
+    log.innerHTML = `<div class="empty"><h2>Welcome to the Library.</h2>
+      <p>The chief librarian keeps the catalogue of neuron personas.<br>Ask her anything — or try <code>/find coffee</code>, <code>/inventory</code>.</p></div>`;
+  }
+  for (const m of state.messages) bubble(m.role, m.content, m.meta);
+  toBottom();
+}
+
+async function health() {
+  try {
+    const h = await (await fetch("/api/health")).json();
+    const a = h.librarian;
+    const extra = (h.extra_steers || []).map(s => " + " + s.label).join("");
+    $("steer").textContent = `${h.model} · L${a.layer} N${a.neuron} ${a.direction} α=${a.alpha}${extra}`;
+    $("dot").className = "dot " + (h.ready ? "ready" : h.error ? "error" : "loading");
+    $("status").textContent = h.ready ? "ready" : h.error ? h.error : "loading model…";
+    if (!h.ready && !h.error) setTimeout(health, 2000);
+  } catch (e) {
+    $("dot").className = "dot error"; $("status").textContent = "server unreachable"; setTimeout(health, 4000);
+  }
+}
+
+function setBusy(b) { busy = b; sendBtn.disabled = b; }
+
+async function sendChat(text) {
+  const history = state.messages.filter(m => m.role === "user" || m.role === "assistant")
+                                .map(m => ({ role: m.role, content: m.content }));
+  state.messages.push({ role: "user", content: text }); save();
+  bubble("user", text); toBottom();
+  const her = bubble("assistant", "");
+  const t = her.querySelector(".text"); t.classList.add("cursor");
+  her.querySelector(".meta").textContent = "thinking…";
+  const body = { message: text, session_id: state.session_id };
+  if (!seeded) body.history = history;
+  let acc = "", done = null;
+  try {
+    const res = await fetch("/api/chat/stream", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    if (!res.ok || !res.body) throw new Error((await res.text()) || res.statusText);
+    const reader = res.body.getReader(), dec = new TextDecoder();
+    let buf = "";
+    while (true) {
+      const { value, done: end } = await reader.read();
+      if (end) break;
+      buf += dec.decode(value, { stream: true });
+      let i;
+      while ((i = buf.indexOf("\n\n")) >= 0) {
+        const chunk = buf.slice(0, i); buf = buf.slice(i + 2);
+        if (!chunk.startsWith("data: ")) continue;
+        const ev = JSON.parse(chunk.slice(6));
+        const stick = atBottom();
+        if (ev.type === "queued") her.querySelector(".meta").textContent = ev.ready ? "writing…" : "waiting for the model to load…";
+        else if (ev.type === "delta") { acc += ev.text; t.textContent = acc.replace(/^\s+/, ""); her.querySelector(".meta").textContent = ""; }
+        else if (ev.type === "done") done = ev;
+        else if (ev.type === "error") throw new Error(ev.error);
+        if (stick) toBottom();
+      }
+    }
+    if (!done) throw new Error("connection closed before the reply finished");
+    t.classList.remove("cursor");
+    t.textContent = done.reply;
+    const meta = `${done.n_tokens} tokens${done.stopped_on_repeat ? " · stopped on repeat" : ""}`;
+    her.querySelector(".meta").textContent = meta;
+    state.session_id = done.session_id; seeded = true;
+    state.messages.push({ role: "assistant", content: done.reply, meta }); save();
+  } catch (e) {
+    her.remove();
+    state.messages.pop(); save();   // drop the unanswered user turn so history stays paired
+    log.lastElementChild && log.lastElementChild.classList.contains("user") && log.lastElementChild.remove();
+    input.value = text;
+    bubble("error", String(e.message || e));
+  }
+  toBottom();
+}
+
+function sys(text) {
+  state.messages.push({ role: "system", content: text }); save();
+  bubble("system", text); toBottom();
+}
+
+const cards = (rs) => rs.length ? rs.map(e => `${e.card}\n    ${(e.reply || "").replace(/\s+/g, " ").slice(0, 220)}`).join("\n\n") : "(no cards)";
+
+async function command(line) {
+  const [cmd, ...restParts] = line.slice(1).split(/\s+/);
+  const rest = restParts.join(" ").trim();
+  const get = async (url) => { const r = await fetch(url); if (!r.ok) throw new Error(await r.text()); return r.json(); };
+  try {
+    if (cmd === "help") {
+      sys("/find QUERY            persona lookup\n/show L N              both cards for a neuron\n/recent [k]            recently filed cards\n/inventory             tested vs untested\n/probe L:N[:up|down|α] probe & file (runs the neuron alone, not her voice)\n/probe! …              re-probe even if filed\n/reset                 forget this conversation");
+    } else if (cmd === "find" || cmd === "lookup") {
+      const r = await get("/api/find?q=" + encodeURIComponent(rest));
+      sys(`${r.results.length} card(s) for “${rest}”:\n\n` + cards(r.results));
+    } else if (cmd === "show" || cmd === "open") {
+      const p = rest.split(/[\s:,]+/);
+      if (p.length >= 2 && /^\d+$/.test(p[0]) && /^\d+$/.test(p[1])) {
+        const r = await get(`/api/open?layer=${p[0]}&neuron=${p[1]}`);
+        sys(cards(r.results));
+      } else {
+        const r = await get("/api/find?q=" + encodeURIComponent(rest)); sys(cards(r.results));
+      }
+    } else if (cmd === "recent") {
+      const r = await get("/api/recent?k=" + (parseInt(rest) || 10)); sys(cards(r.results));
+    } else if (cmd === "inventory" || cmd === "inv") {
+      const r = await get("/api/inventory");
+      sys(r.inventories.map(i => i.report + "\n  next: " + i.next.join(", ")).join("\n\n"));
+    } else if (cmd === "probe" || cmd === "probe!") {
+      const p = rest.split(/[\s:,]+/).filter(Boolean);
+      if (p.length < 2) throw new Error("usage: /probe L:N[:up|down|α]");
+      const body = { layer: +p[0], neuron: +p[1], direction: p[2] || "both", force: cmd === "probe!" };
+      sys(`probing L${body.layer} N${body.neuron} ${body.direction} … (asks “Who are you?” with that neuron alone)`);
+      const r = await fetch("/api/probe", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      if (!r.ok) throw new Error(await r.text());
+      const j = await r.json();
+      sys(j.results.map(x => `${x.status}: ${x.entry ? x.entry.card : x.suggested_persona}\n    ${(x.reply || (x.entry && x.entry.reply) || "").replace(/\s+/g, " ").slice(0, 400)}`).join("\n\n"));
+    } else if (cmd === "reset") {
+      await resetChat();
+    } else {
+      throw new Error(`unknown command /${cmd} — try /help`);
+    }
+  } catch (e) { bubble("error", String(e.message || e)); toBottom(); }
+}
+
+async function resetChat() {
+  if (state.session_id) {
+    try { await fetch("/api/reset", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ session_id: state.session_id }) }); } catch (e) {}
+  }
+  state = { session_id: state.session_id, messages: [] }; seeded = true; save(); renderAll();
+}
+
+$("form").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const text = input.value.trim();
+  if (!text || busy) return;
+  input.value = ""; autosize();
+  setBusy(true);
+  try { text.startsWith("/") ? await command(text) : await sendChat(text); }
+  finally { setBusy(false); input.focus(); }
+});
+input.addEventListener("keydown", (ev) => {
+  if (ev.key === "Enter" && !ev.shiftKey && !ev.isComposing) { ev.preventDefault(); $("form").requestSubmit(); }
+});
+function autosize() { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 200) + "px"; }
+input.addEventListener("input", autosize);
+$("newchat").addEventListener("click", () => { if (!busy) resetChat(); });
+
+renderAll();
+health();
+</script>
+</body>
+</html>

@@ -101,6 +101,40 @@ uv run neuron-steer lib inventory
 uv run neuron-steer lib export > catalogue.json
 ```
 
+### Web chat (`neuron-steer serve`)
+
+A ChatGPT-style page for talking to her in the browser:
+
+```bash
+uv run neuron-steer serve            # or: uv run neuron-steer web   (--port 8765, --host 127.0.0.1)
+# open http://localhost:8765/
+```
+
+The model (mlx 4-bit) loads once in the background at startup; the page shows a status dot
+and queues your first message until she is ready. Every chat turn runs with **only her
+voice, L9 N367 at α = −0.75** (`--librarian-alpha`), plus any `-n` extras you pass to
+`serve`, and a short catalogue note as the system message (`--no-context` to drop it).
+Replies stream token by token. Conversations are kept server-side per browser session
+(and in localStorage, so a reload or a server restart keeps the thread). Enter sends,
+Shift+Enter adds a line; "New chat" forgets the thread. The box also takes `/find`,
+`/show L N`, `/recent`, `/inventory`, `/probe L:N[:up|down|α]` (`/probe!` re-probes)
+and `/reset`.
+
+API (JSON; interactive docs at `/api/docs`):
+
+| endpoint | what |
+|---|---|
+| `POST /api/chat` `{message, session_id?, history?}` | her reply; `history` (user/assistant turns) replaces the session's |
+| `POST /api/chat/stream` | same body, Server-Sent Events: `queued`, `delta`…, `done` / `error` |
+| `POST /api/reset` `{session_id}` | forget a conversation |
+| `POST /api/probe` `{layer, neuron, direction?=both, alpha?, force?, file?=true, persona?, tags?}` | probe "Who are you?" with that neuron **alone** and file the card |
+| `GET /api/inventory`, `/api/find?q=`, `/api/open?layer=&neuron=`, `/api/recent?k=` | catalogue reads (no model) |
+| `GET /api/health` | model ready?, steers |
+
+`--no-model` serves only the catalogue endpoints. All model work runs on one worker
+thread (MLX + steering hooks aren't thread-safe); chat state is `LibrarianSession`
+in `librarian.py`, the same object the terminal REPL uses.
+
 ## Hardware notes
 
 - **Disk:** the bf16 weights take about **16 GB**. They download to the HF cache

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from contextlib import contextmanager
-from typing import Any, Iterator
+from typing import Any, Callable, Iterator
 
 import mlx.core as mx
 import mlx.nn as nn
@@ -69,6 +69,8 @@ def _median(x: mx.array) -> float:
 
 class MLXNeuronSteer:
     """Drop-in counterpart of :class:`neuron_steer.steer.NeuronSteer` using mlx-lm."""
+
+    supports_streaming = True  # generate(..., on_text=cb) calls cb with each decoded text piece
 
     def __init__(self, model_name: str = DEFAULT_MLX_MODEL, **_: Any):
         from mlx_lm import load
@@ -181,6 +183,7 @@ class MLXNeuronSteer:
         temperature: float = 0.0,
         top_p: float = 1.0,
         repeat_stop: bool = True,
+        on_text: Callable[[str], None] | None = None,
     ) -> GenerationResult:
         from mlx_lm import stream_generate
         from mlx_lm.sample_utils import make_sampler
@@ -201,6 +204,8 @@ class MLXNeuronSteer:
                 if repeat_stop and _repeats(gen):
                     stopped = True
                     break
+                if on_text is not None and resp.text:
+                    on_text(resp.text)
         text = strip_think(self.tokenizer.decode(gen, skip_special_tokens=True))
         return GenerationResult(text, applied, len(gen), stopped)
 

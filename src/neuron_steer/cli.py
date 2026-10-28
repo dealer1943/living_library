@@ -1,4 +1,4 @@
-"""neuron-steer CLI: who / ask / baseline / chat / librarian / lib."""
+"""neuron-steer CLI: who / ask / baseline / chat / librarian / lib / serve (web)."""
 
 from __future__ import annotations
 
@@ -25,6 +25,7 @@ examples:
   neuron-steer chat -n 12:545:down
   neuron-steer librarian                     # chief librarian (L9:367:down) files personas; mlx by default
   neuron-steer lib find coffee bean          # catalogue lookups without loading a model
+  neuron-steer serve                         # web chat with the librarian at http://localhost:8765/
 """
 
 
@@ -95,6 +96,27 @@ def build_parser() -> argparse.ArgumentParser:
     lb.add_argument("--no-context", action="store_true", help="don't give her a catalogue summary when chatting")
     _add_common(lb)
     lb.set_defaults(backend="mlx")
+
+    for name in ("serve", "web"):
+        sv = sub.add_parser(
+            name, help="web chat with the chief librarian (L9:367:down) + catalogue API on localhost"
+            + (" (alias of serve)" if name == "web" else ""),
+            description="Serve a ChatGPT-style page for talking to the Librarian of Alexandria, plus "
+                        "/api/chat, /api/probe, /api/inventory, /api/find. The model loads once at startup "
+                        "(mlx 4-bit by default). -n steers are stacked on her voice.",
+            epilog=STEER_HELP, formatter_class=argparse.RawDescriptionHelpFormatter)
+        sv.add_argument("--host", default="127.0.0.1", help="bind address (default 127.0.0.1)")
+        sv.add_argument("--port", type=int, default=8765, help="port (default 8765)")
+        sv.add_argument("--library", default=None, help="catalogue path (default library/library.db or $NEURON_LIBRARY)")
+        sv.add_argument("--alpha", type=float, default=1.25, help="default probe magnitude for /api/probe (1.25)")
+        sv.add_argument("--librarian-alpha", type=float, default=0.75,
+                        help="her own push down on L9 N367 (default 0.75)")
+        sv.add_argument("--no-context", action="store_true", help="don't give her a catalogue summary when chatting")
+        sv.add_argument("--no-model", action="store_true",
+                        help="don't load the model: catalogue endpoints only (chat returns 503)")
+        sv.add_argument("--log-level", default="warning", help="uvicorn log level (default warning)")
+        _add_common(sv)
+        sv.set_defaults(backend="mlx", max_new_tokens=400)
 
     lo = sub.add_parser("lib", help="catalogue one-shots (no model): find / open / inventory / recent / personas / export")
     lo.add_argument("--library", default=None, help="catalogue path (default library/library.db or $NEURON_LIBRARY)")
@@ -245,6 +267,11 @@ def main(argv: list[str] | None = None) -> int:
     except (ValueError, OSError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
+
+    if args.cmd in ("serve", "web"):
+        from .web import run_server
+        args.extra_steers = steers
+        return run_server(args)
 
     if args.cmd == "baseline" or (args.cmd in ("who", "ask") and not steers):
         if args.cmd != "baseline":
