@@ -8,7 +8,10 @@ A small FastAPI app serving one static chat page plus a JSON API:
                              ``reply`` (the cleaned spoken reply so far, replaces), ``spill`` (untagged
                              reasoning split off the reply so far, replaces), then ``done``
 * ``POST /api/reset``        {session_id} -> forget that conversation
-* ``POST /api/probe``        {layer, neuron, direction?, alpha?, force?, file?, persona?, tags?} | {spec: "12:545 --alpha 0.5", ...}
+* ``POST /api/probe``        {layer, neuron, direction?, alpha?, prompt?, force?, file?, persona?, tags?} |
+                             {spec: "12:545 --alpha 0.5 --prompt \"what is your story?\"", ...}
+                             (prompt defaults to "Who are you?"; a custom prompt on an already-filed
+                             card returns the reply unfiled unless force)
 * ``GET  /api/inventory``, ``/api/find?q=``, ``/api/open?layer=&neuron=``, ``/api/recent?k=``
   catalogue reads straight from SQLite (no model needed)
 * ``GET  /api/health``       model loaded? which steers?
@@ -35,8 +38,8 @@ from pathlib import Path
 from typing import Any
 
 from .library import DEFAULT_DB, LIBRARIAN, Entry, Library
-from .librarian import LibrarianSession, _parse_dir, _parse_target
-from .prompts import split_live
+from .librarian import LibrarianSession, _parse_dir, _parse_target, _split_prompt
+from .prompts import DEFAULT_PROMPT, split_live
 
 STATIC = Path(__file__).parent / "static"
 MAX_SESSIONS = 64
@@ -124,25 +127,32 @@ class LibrarianServer:
             raise RuntimeError(self.error or "model not loaded")
         s = self.base
         alpha = body.get("alpha")
+        prompt = body.get("prompt")
         if body.get("spec"):   # the slash-command text after /probe, parsed like the REPL
-            L, N, dirs = _parse_target(str(body["spec"]))
+            spec, spec_prompt = _split_prompt(str(body["spec"]))
+            prompt = prompt or spec_prompt
+            L, N, dirs = _parse_target(spec)
         else:
             L, N = int(body["layer"]), int(body["neuron"])
             d = str(body.get("direction") or "both").lower()
             dirs = [("up", None), ("down", None)] if d == "both" else [_parse_dir(d)]
+        prompt = str(prompt or "").strip() or DEFAULT_PROMPT
+        custom = prompt != DEFAULT_PROMPT
         force, do_file = bool(body.get("force")), body.get("file", True)
         out = []
         for direction, a in dirs:
             a = abs(float(alpha if alpha is not None else (a if a is not None else self.args.alpha)))
             old = s.lib.get(L, N, direction, s.model)
-            if old and not force:
+            if old and not force and not custom:
                 out.append({"status": "already filed", "entry": _entry(old)})
                 continue
-            p = s.probe(L, N, direction, a)
-            item: dict[str, Any] = {"layer": L, "neuron": N, "direction": direction, "alpha": a,
+            p = s.probe(L, N, direction, a, prompt)
+            item: dict[str, Any] = {"layer": L, "neuron": N, "direction": direction, "alpha": a, "prompt": p.prompt,
                                     "reply": p.result.text, "suggested_persona": p.persona,
                                     "steer": _steer(p.steer)}
-            if do_file:
+            if old and not force:   # custom question on a filed card: show it, keep the card
+                item["status"] = "unfiled (card kept; /probe! to file)"
+            elif do_file:
                 e = s.file(p, persona=body.get("persona") or None, tags=body.get("tags") or [])
                 item.update(status="replaced" if old else "filed", entry=_entry(e))
             else:

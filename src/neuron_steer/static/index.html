@@ -90,7 +90,7 @@
     <textarea id="input" rows="1" placeholder="Ask the Librarian…" autofocus></textarea>
     <button id="send" type="submit">Send</button>
   </form>
-  <div class="hint">Enter to send · Shift+Enter for a new line · <code>/find</code> <code>/inventory</code> <code>/probe L:N[:up|down] [--alpha X]</code> <code>/help</code></div>
+  <div class="hint">Enter to send · Shift+Enter for a new line · <code>/find</code> <code>/inventory</code> <code>/probe L:N[:up|down] [--alpha X] [--prompt "Q"]</code> <code>/help</code></div>
 </footer>
 <script>
 const $ = (id) => document.getElementById(id);
@@ -249,7 +249,10 @@ function neuronRef(rest) {
 }
 const looksLikeRef = (rest) => { const w = rest.split(/\s+/).filter(Boolean);
   return w.length > 0 && w.length <= 3 && w.slice(0, 2).every(x => /^([ln]\d*|\d+|up|down)$/i.test(x)); };
-const PROBE_USAGE = "usage: /probe L:N[:up|down][:α] [--alpha X]  (e.g. /probe 12:545:up, /probe 12:545 --alpha 0.5, /probe L12 N545 down -a 2)";
+const PROBE_USAGE = 'usage: /probe L:N[:up|down][:α] [--alpha X] [--prompt "Q"]  (e.g. /probe 12:545:up, /probe 12:545 --alpha 0.5, /probe L12 N545 down -a 2, /probe 12:545 -a 0.5 --prompt "what is your story?")';
+// the custom question in a /probe line, for the status message (the server does the real parse)
+const probePrompt = (rest) => { const m = rest.match(/(?:^|\s)(?:--prompt|-p|prompt)(?:\s*=\s*|\s+)(?:"([^"]*)"|'([^']*)'|\u201c([^\u201d]*)\u201d|(.+?))(?=\s+(?:--alpha|-a|alpha)(?:\s|=)|$)/i);
+  return m ? (m[1] ?? m[2] ?? m[3] ?? m[4] ?? "").trim() : ""; };
 const SHOW_USAGE = "usage: /show L N [up|down] — e.g. /show 12 545, /show L12 N545 up — or /show NAME";
 
 const cards = (rs) => rs.length ? rs.map(e => `${e.card}\n    ${(e.reply || "").replace(/\s+/g, " ").slice(0, 220)}`).join("\n\n") : "(no cards)";
@@ -260,7 +263,7 @@ async function command(line) {
   const get = async (url) => { const r = await fetch(url); if (!r.ok) throw new Error(await r.text()); return r.json(); };
   try {
     if (cmd === "help") {
-      sys("/find QUERY            persona lookup\n/show L N [up|down]    a neuron's cards (12 545, L12 N545 up, 12:545:down)\n/recent [k]            recently filed cards\n/inventory             tested vs untested\n/probe L:N[:up|down|α] probe & file (runs the neuron alone, not her voice)\n/probe 12:545 --alpha 0.5   explicit |α| (also -a 0.5, alpha=0.5, 12:545:up:0.5; -a -0.5 = down only)\n/probe! …              re-probe even if filed\n/reset                 forget this conversation");
+      sys("/find QUERY            persona lookup\n/show L N [up|down]    a neuron's cards (12 545, L12 N545 up, 12:545:down)\n/recent [k]            recently filed cards\n/inventory             tested vs untested\n/probe L:N[:up|down|α] probe & file (runs the neuron alone, not her voice)\n/probe 12:545 --alpha 0.5   explicit |α| (also -a 0.5, alpha=0.5, 12:545:up:0.5; -a -0.5 = down only)\n/probe 12:545 --prompt "Q"  ask Q instead of “Who are you?” (also -p "Q", --prompt="Q"; on a filed card: shown, not filed — /probe! files it)\n/probe! …              re-probe even if filed\n/reset                 forget this conversation");
     } else if (cmd === "find" || cmd === "lookup") {
       const r = await get("/api/find?q=" + encodeURIComponent(rest));
       sys(`${r.results.length} card(s) for “${rest}”:\n\n` + cards(r.results));
@@ -285,11 +288,11 @@ async function command(line) {
       if (p.length < 2 || !/^\d+$/.test(p[0]) || !/^\d+$/.test(p[1])) throw new Error(PROBE_USAGE);
           // the server parses the spec exactly like the REPL: 12:545, 12:545:up:0.5, 12:545 --alpha 0.5, -a X, alpha=X
       const body = { spec: rest, force: cmd === "probe!" };
-      sys(`probing ${rest} … (asks “Who are you?” with that neuron alone)`);
+      sys(`probing ${rest} … (asks “${probePrompt(rest) || "Who are you?"}” with that neuron alone)`);
       const r = await fetch("/api/probe", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       if (!r.ok) throw new Error(await r.text());
       const j = await r.json();
-      sys(j.results.map(x => `${x.status}${x.alpha != null ? ` (${x.direction} |α|=${x.alpha})` : ""}: ${x.entry ? x.entry.card : x.suggested_persona}\n    ${(x.reply || (x.entry && x.entry.reply) || "").replace(/\s+/g, " ").slice(0, 400)}`).join("\n\n"));
+      sys(j.results.map(x => `${x.status}${x.alpha != null ? ` (${x.direction} |α|=${x.alpha})` : ""}${x.prompt && x.prompt !== "Who are you?" ? ` Q: “${x.prompt}”` : ""}: ${x.entry ? x.entry.card : x.suggested_persona}\n    ${(x.reply || (x.entry && x.entry.reply) || "").replace(/\s+/g, " ").slice(0, 400)}`).join("\n\n"));
     } else if (cmd === "reset") {
       await resetChat();
     } else {

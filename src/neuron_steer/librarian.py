@@ -54,10 +54,13 @@ probing & filing
                            (no direction = both, skipping cards already filed)
   /probe L:N[:dir] --alpha X   same with |α|=X (also -a X, alpha=X, L:N:up:X);
                            a signed X with no direction picks it: /probe 12:545 -a -0.5 = down
+  /probe L:N … --prompt "Q"   ask Q instead of "Who are you?" under the same push
+                           (also -p "Q", --prompt="Q", prompt="Q"; unquoted runs to the end of the line);
+                           on an already-filed card it shows the reply but keeps the card (/probe! files it)
   /probe random [k]        probe k random untouched cards
   /probe! …                re-probe even if already filed (old reply kept in history)
   /alpha [X]               show / set the default probe magnitude (default 1.25)
-  /flip L N [--alpha X]    probe both up and down
+  /flip L N [--alpha X] [--prompt "Q"]   probe both up and down
   /next [k]                probe the next k untested cards (finishes half-flipped neurons first)
 the catalogue
   /find QUERY              persona lookup (persona/tags first, then reply text)  — or just: find QUERY
@@ -107,7 +110,41 @@ def _looks_like_ref(rest: str) -> bool:
 _ALPHA_FLAG = re.compile(
     r"(?:^|\s)(?:--alpha|-a|alpha|\u03b1)(?:\s*=\s*|\s+)([+-]?(?:\d+(?:\.\d*)?|\.\d+))(?=\s|$)", re.I)
 _NUM = re.compile(r"^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$")
-TARGET_USAGE = "expected L:N[:up|down][:α] [--alpha X] — e.g. 12:545, 12:545:up:0.5, 12:545 --alpha 0.5, 12 545 down -a 2"
+TARGET_USAGE = ("expected L:N[:up|down][:α] [--alpha X] [--prompt \"Q\"] — e.g. 12:545, 12:545:up:0.5, "
+                "12:545 --alpha 0.5, 12 545 down -a 2, 12:545 -a 0.5 --prompt \"what is your story?\"")
+
+
+_PROMPT_FLAG = re.compile(r"(?:^|\s)(?:--prompt|-p|prompt)(?:\s*=\s*|\s+)", re.I)
+_QUOTES = {'"': '"', "'": "'", "\u201c": "\u201d", "\u2018": "\u2019"}
+
+
+def _split_prompt(rest: str) -> tuple[str, str | None]:
+    """Pull a custom probe question out of the /probe text -> (rest without it, prompt or None).
+
+    ``12:545 --alpha 0.5 --prompt "what is your story?"`` | ``-p 'Q'`` | ``--prompt="Q"`` |
+    ``prompt=Q`` | ``--prompt what is your story?`` (unquoted: to the end of the line, stopping
+    before a trailing ``--alpha X`` / ``-a X``).
+    """
+    m = _PROMPT_FLAG.search(rest)
+    if not m:
+        return rest, None
+    head, tail = rest[:m.start()], rest[m.end():]
+    q = tail[:1]
+    if q in _QUOTES:
+        end = tail.find(_QUOTES[q], 1)
+        if end < 0:
+            raise ValueError("unterminated quote in --prompt")
+        prompt, after = tail[1:end], tail[end + 1:]
+    else:
+        a = _ALPHA_FLAG.search(tail)
+        prompt, after = (tail[:a.start()], tail[a.start():]) if a else (tail, "")
+    prompt = prompt.strip()
+    if not prompt:
+        raise ValueError('empty --prompt; e.g. --prompt "what is your story?"')
+    rest = head + " " + after
+    if _PROMPT_FLAG.search(rest):
+        raise ValueError("prompt given twice")
+    return rest.strip(), prompt
 
 
 def _parse_target(rest: str) -> tuple[int, int, list[tuple[str, float | None]]]:
@@ -152,6 +189,7 @@ class ProbeResult:
     steer: Steer
     result: GenerationResult
     persona: str
+    prompt: str = DEFAULT_PROMPT
 
 
 class LibrarianSession:
@@ -250,22 +288,23 @@ class LibrarianSession:
     def reset(self) -> None:
         self.history.clear()
 
-    def probe(self, L: int, N: int, direction: str, alpha: float) -> ProbeResult:
-        """Push (L, N, direction) alone — never with her voice — and ask "Who are you?"."""
+    def probe(self, L: int, N: int, direction: str, alpha: float, prompt: str | None = None) -> ProbeResult:
+        """Push (L, N, direction) alone — never with her voice — and ask ``prompt`` ("Who are you?")."""
         alpha = abs(alpha)
+        prompt = (prompt or "").strip() or DEFAULT_PROMPT
         steer = Steer(L, N, alpha if direction == "up" else -alpha)
         self.lab.validate([steer])
-        res = self.generate([{"role": "user", "content": DEFAULT_PROMPT}], [steer])
+        res = self.generate([{"role": "user", "content": prompt}], [steer])
         persona = suggest_persona(res.text)
         if (L, N, direction) == LIBRARIAN and "librar" in res.text.lower():
             persona = "chief librarian"
-        return ProbeResult(L, N, direction, alpha, steer, res, persona)
+        return ProbeResult(L, N, direction, alpha, steer, res, persona, prompt)
 
     def file(self, p: ProbeResult, persona: str | None = None, tags: list[str] | None = None) -> Entry:
         r = p.result
         return self.lib.file_persona(Entry(
             layer=p.layer, neuron=p.neuron, direction=p.direction, alpha=p.alpha, reply=r.text,
-            persona=persona or p.persona, model=self.model, backend=self.backend, prompt=DEFAULT_PROMPT,
+            persona=persona or p.persona, model=self.model, backend=self.backend, prompt=p.prompt,
             tags=list(tags or []), weirdness=guess_weirdness(r.text, r.stopped_on_repeat),
             stopped_on_repeat=r.stopped_on_repeat, n_tokens=r.n_new_tokens))
 
@@ -335,18 +374,24 @@ class Librarian:
 
     # -- probing ----------------------------------------------------------------------------
 
-    def probe(self, L: int, N: int, direction: str, alpha: float | None = None, force: bool = False) -> Entry | None:
+    def probe(self, L: int, N: int, direction: str, alpha: float | None = None, force: bool = False,
+              prompt: str | None = None) -> Entry | None:
         alpha = abs(alpha if alpha is not None else self.alpha)
+        prompt = (prompt or "").strip() or DEFAULT_PROMPT
+        custom = prompt != DEFAULT_PROMPT
         old = self.lib.get(L, N, direction, self.model)
-        if old and not force:
+        if old and not force and not custom:
             self.say(f"already on the shelf (use /probe! to re-probe):\n  {old.card(width=160)}")
             return old
-        self.say(f"pushing {Steer(L, N, alpha if direction == 'up' else -alpha)} and asking {DEFAULT_PROMPT!r} …")
-        p = self.session.probe(L, N, direction, alpha)
+        self.say(f"pushing {Steer(L, N, alpha if direction == 'up' else -alpha)} and asking {prompt!r} …")
+        p = self.session.probe(L, N, direction, alpha, prompt)
         steer, res, persona = p.steer, p.result, p.persona
         rep = " [stopped: exact repeat]" if res.stopped_on_repeat else ""
         self.say_raw(f"\n  ── {steer.layer}:{steer.neuron}:{direction} ({res.n_new_tokens} tokens){rep} ──")
         self.say_raw("  " + res.text.replace("\n", "\n  ") + "\n")
+        if old and not force:   # custom question on a filed card: show it, keep the card
+            self.say(f"kept the existing card (asked {old.prompt!r}); /probe! … --prompt to file this one over it.")
+            return None
         tags: list[str] = []
         if not self.auto_file:
             ans = self.ask(f"{LIB} file as “{persona}”? [enter = yes · type a name (#tags ok) · s = skip] ").strip()
@@ -473,18 +518,20 @@ class Librarian:
                 for L, N, d in self.lib.suggest_untested(self.model, k=k, rng=self.rng, finish_half=False):
                     self.probe(L, N, d, force=force)
             else:
+                rest, prompt = _split_prompt(rest)
                 L, N, dirs = _parse_target(rest)
                 for d, a in dirs:
-                    self.probe(L, N, d, a, force=force)
+                    self.probe(L, N, d, a, force=force, prompt=prompt)
         elif cmd == "/alpha":
             if rest:
                 self.alpha = abs(float(rest))
             self.say(f"probes push with |α|={self.alpha:g}.")
         elif cmd == "/flip":
+            rest, prompt = _split_prompt(rest)
             L, N, dirs = _parse_target(rest)
             a = next((x for _, x in dirs if x is not None), None)   # /flip 12 545 --alpha 0.5
             for d in ("up", "down"):
-                self.probe(L, N, d, a, force=force)
+                self.probe(L, N, d, a, force=force, prompt=prompt)
         elif cmd == "/next":
             k = int(rest) if rest else 1
             for L, N, d in self.lib.suggest_untested(self.model, k=k, rng=self.rng):
