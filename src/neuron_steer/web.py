@@ -8,7 +8,7 @@ A small FastAPI app serving one static chat page plus a JSON API:
                              ``reply`` (the cleaned spoken reply so far, replaces), ``spill`` (untagged
                              reasoning split off the reply so far, replaces), then ``done``
 * ``POST /api/reset``        {session_id} -> forget that conversation
-* ``POST /api/probe``        {layer, neuron, direction?, alpha?, force?, file?, persona?, tags?}
+* ``POST /api/probe``        {layer, neuron, direction?, alpha?, force?, file?, persona?, tags?} | {spec: "12:545 --alpha 0.5", ...}
 * ``GET  /api/inventory``, ``/api/find?q=``, ``/api/open?layer=&neuron=``, ``/api/recent?k=``
   catalogue reads straight from SQLite (no model needed)
 * ``GET  /api/health``       model loaded? which steers?
@@ -35,7 +35,7 @@ from pathlib import Path
 from typing import Any
 
 from .library import DEFAULT_DB, LIBRARIAN, Entry, Library
-from .librarian import LibrarianSession, _parse_dir
+from .librarian import LibrarianSession, _parse_dir, _parse_target
 from .prompts import split_live
 
 STATIC = Path(__file__).parent / "static"
@@ -123,11 +123,13 @@ class LibrarianServer:
         if self.base is None:
             raise RuntimeError(self.error or "model not loaded")
         s = self.base
-        L, N = int(body["layer"]), int(body["neuron"])
-        d = str(body.get("direction") or "both").lower()
         alpha = body.get("alpha")
-        dirs: list[tuple[str, float | None]] = (
-            [("up", None), ("down", None)] if d == "both" else [_parse_dir(d)])
+        if body.get("spec"):   # the slash-command text after /probe, parsed like the REPL
+            L, N, dirs = _parse_target(str(body["spec"]))
+        else:
+            L, N = int(body["layer"]), int(body["neuron"])
+            d = str(body.get("direction") or "both").lower()
+            dirs = [("up", None), ("down", None)] if d == "both" else [_parse_dir(d)]
         force, do_file = bool(body.get("force")), body.get("file", True)
         out = []
         for direction, a in dirs:

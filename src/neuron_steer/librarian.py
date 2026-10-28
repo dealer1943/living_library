@@ -52,10 +52,12 @@ HELP = """\
 probing & filing
   /probe L:N[:up|down|α]   ask "Who are you?" with that push and file the reply
                            (no direction = both, skipping cards already filed)
+  /probe L:N[:dir] --alpha X   same with |α|=X (also -a X, alpha=X, L:N:up:X);
+                           a signed X with no direction picks it: /probe 12:545 -a -0.5 = down
   /probe random [k]        probe k random untouched cards
   /probe! …                re-probe even if already filed (old reply kept in history)
   /alpha [X]               show / set the default probe magnitude (default 1.25)
-  /flip L N                probe both up and down
+  /flip L N [--alpha X]    probe both up and down
   /next [k]                probe the next k untested cards (finishes half-flipped neurons first)
 the catalogue
   /find QUERY              persona lookup (persona/tags first, then reply text)  — or just: find QUERY
@@ -102,16 +104,42 @@ def _looks_like_ref(rest: str) -> bool:
     return bool(w) and len(w) <= 3 and all(re.fullmatch(r"[ln]\d*|\d+|up|down", x, re.I) for x in w[:2])
 
 
+_ALPHA_FLAG = re.compile(
+    r"(?:^|\s)(?:--alpha|-a|alpha|\u03b1)(?:\s*=\s*|\s+)([+-]?(?:\d+(?:\.\d*)?|\.\d+))(?=\s|$)", re.I)
+_NUM = re.compile(r"^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$")
+TARGET_USAGE = "expected L:N[:up|down][:α] [--alpha X] — e.g. 12:545, 12:545:up:0.5, 12:545 --alpha 0.5, 12 545 down -a 2"
+
+
 def _parse_target(rest: str) -> tuple[int, int, list[tuple[str, float | None]]]:
-    """``9:367:down`` | ``9,367,-1`` | ``9 367 up`` | ``9:367`` (both) -> (L, N, [(dir, |α|?)...])."""
+    """``L:N[:up|down][:α] [--alpha|-a X]`` -> (L, N, [(dir, |α|?)...]).
+
+    ``9:367:down`` | ``9,367,-1`` | ``9 367 up`` | ``9:367`` (both) | ``12:545:up:0.5`` |
+    ``12:545 --alpha 0.5`` (both, |α|=0.5) | ``12:545 -a -0.5`` (signed, no direction: down only) |
+    ``L12 N545 up --alpha=2``. A flag magnitude overrides one written in the target.
+    """
+    flag: str | None = None
+    m = _ALPHA_FLAG.search(rest)
+    if m:
+        flag = m.group(1)
+        rest = rest[:m.start()] + " " + rest[m.end():]
+        if _ALPHA_FLAG.search(rest):
+            raise ValueError("alpha given twice; " + TARGET_USAGE)
     parts = [p for p in rest.replace(":", " ").replace(",", " ").split() if p]
     parts[:2] = [p[1:] if p[:1].lower() in ("l", "n") and p[1:].isdigit() else p for p in parts[:2]]
-    if len(parts) not in (2, 3):
-        raise ValueError("expected L:N[:up|down|α]")
+    if len(parts) not in (2, 3, 4) or not all(p.isdigit() for p in parts[:2]):
+        raise ValueError(TARGET_USAGE)
     L, N = int(parts[0]), int(parts[1])
+    fa = abs(float(flag)) if flag is not None else None
     if len(parts) == 2:
-        return L, N, [("up", None), ("down", None)]
-    return L, N, [_parse_dir(parts[2])]
+        if flag is not None and flag[0] in "+-":       # signed alpha, no direction: that direction only
+            return L, N, [(direction_of(float(flag)), fa)]
+        return L, N, [("up", fa), ("down", fa)]
+    d, a = _parse_dir(parts[2])
+    if len(parts) == 4:
+        if a is not None or not _NUM.match(parts[3]):
+            raise ValueError(TARGET_USAGE)
+        a = abs(float(parts[3]))
+    return L, N, [(d, fa if fa is not None else a)]
 
 
 @dataclass
@@ -453,9 +481,10 @@ class Librarian:
                 self.alpha = abs(float(rest))
             self.say(f"probes push with |α|={self.alpha:g}.")
         elif cmd == "/flip":
-            L, N, _ = _parse_target(rest)
+            L, N, dirs = _parse_target(rest)
+            a = next((x for _, x in dirs if x is not None), None)   # /flip 12 545 --alpha 0.5
             for d in ("up", "down"):
-                self.probe(L, N, d, force=force)
+                self.probe(L, N, d, a, force=force)
         elif cmd == "/next":
             k = int(rest) if rest else 1
             for L, N, d in self.lib.suggest_untested(self.model, k=k, rng=self.rng):

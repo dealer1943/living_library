@@ -7,7 +7,7 @@
 <style>
   :root {
     --bg: #15120e; --panel: #1e1a14; --ink: #ece3d0; --muted: #a39780; --line: #3a3226;
-    --you: #2c3a4a; --her: #2a2318; --accent: #d4a24c; --err: #e07a5f;
+    --you: #2f5d8a; --you-ink: #f1f6fb; --her: #2a2318; --accent: #d4a24c; --err: #e07a5f;
     --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
     --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
     --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -30,7 +30,16 @@
   #log { max-width: 820px; margin: 0 auto; padding: 24px 20px 12px; }
   .msg { display: flex; gap: 12px; margin: 0 0 20px; }
   .avatar { flex: none; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font: 600 14px var(--serif); }
-  .msg.user .avatar { background: var(--you); }
+  .msg.user .avatar { background: var(--you); color: var(--you-ink); }
+  /* classic chat layout: you on the right in blue bubbles, the librarian (and the catalogue) on the left */
+  .msg.user { flex-direction: row-reverse; }
+  .msg.user .body { flex: 0 1 auto; max-width: 78%; display: flex; flex-direction: column; align-items: flex-end; }
+  .msg.user .who, .msg.user .meta { text-align: right; }
+  .msg.user .text { background: var(--you); color: var(--you-ink); padding: 9px 14px; border-radius: 18px 18px 4px 18px; }
+  .msg.user.cmd .text { font: 14px/1.5 var(--mono); }
+  .msg.assistant .body { flex: 0 1 auto; max-width: 85%; }
+  .msg.assistant .text { background: var(--her); border: 1px solid var(--line); padding: 9px 14px; border-radius: 18px 18px 18px 4px; }
+  .msg.assistant .text:empty:not(.cursor) { display: none; }
   .msg.assistant .avatar { background: var(--accent); color: #1b150c; }
   .msg.system .avatar { background: var(--line); color: var(--muted); }
   .body { min-width: 0; flex: 1; }
@@ -81,7 +90,7 @@
     <textarea id="input" rows="1" placeholder="Ask the Librarian…" autofocus></textarea>
     <button id="send" type="submit">Send</button>
   </form>
-  <div class="hint">Enter to send · Shift+Enter for a new line · <code>/find</code> <code>/inventory</code> <code>/probe L:N[:up|down]</code> <code>/help</code></div>
+  <div class="hint">Enter to send · Shift+Enter for a new line · <code>/find</code> <code>/inventory</code> <code>/probe L:N[:up|down] [--alpha X]</code> <code>/help</code></div>
 </footer>
 <script>
 const $ = (id) => document.getElementById(id);
@@ -108,7 +117,7 @@ function setThoughts(el, thoughts, label, live) {
   d.querySelector(".thought-text").textContent = thoughts || "";
 }
 
-function bubble(role, text, meta, thoughts, label) {
+function bubble(role, text, meta, thoughts, label, isCmd) {
   const empty = log.querySelector(".empty"); if (empty) empty.remove();
   const el = document.createElement("div");
   el.className = "msg " + role;
@@ -120,6 +129,7 @@ function bubble(role, text, meta, thoughts, label) {
   el.querySelector(".text").textContent = text;
   el.querySelector(".meta").textContent = meta || "";
   if (role === "error") el.classList.add("system");
+  if (isCmd) el.classList.add("cmd");
   if (thoughts) setThoughts(el, thoughts, label || "Thoughts", false);
   log.appendChild(el);
   return el;
@@ -131,7 +141,7 @@ function renderAll() {
     log.innerHTML = `<div class="empty"><h2>Welcome to the Library.</h2>
       <p>The chief librarian keeps the catalogue of neuron personas.<br>Ask her anything — or try <code>/find coffee</code>, <code>/inventory</code>.</p></div>`;
   }
-  for (const m of state.messages) bubble(m.role, m.content, m.meta, m.thoughts, thoughtLabel(m));
+  for (const m of state.messages) bubble(m.role, m.content, m.meta, m.thoughts, thoughtLabel(m), m.cmd);
   toBottom();
 }
 
@@ -152,7 +162,7 @@ async function health() {
 function setBusy(b) { busy = b; sendBtn.disabled = b; }
 
 async function sendChat(text) {
-  const history = state.messages.filter(m => m.role === "user" || m.role === "assistant")
+  const history = state.messages.filter(m => (m.role === "user" && !m.cmd) || m.role === "assistant")
                                 .map(m => ({ role: m.role, content: m.content }));
   state.messages.push({ role: "user", content: text }); save();
   bubble("user", text); toBottom();
@@ -239,6 +249,7 @@ function neuronRef(rest) {
 }
 const looksLikeRef = (rest) => { const w = rest.split(/\s+/).filter(Boolean);
   return w.length > 0 && w.length <= 3 && w.slice(0, 2).every(x => /^([ln]\d*|\d+|up|down)$/i.test(x)); };
+const PROBE_USAGE = "usage: /probe L:N[:up|down][:α] [--alpha X]  (e.g. /probe 12:545:up, /probe 12:545 --alpha 0.5, /probe L12 N545 down -a 2)";
 const SHOW_USAGE = "usage: /show L N [up|down] — e.g. /show 12 545, /show L12 N545 up — or /show NAME";
 
 const cards = (rs) => rs.length ? rs.map(e => `${e.card}\n    ${(e.reply || "").replace(/\s+/g, " ").slice(0, 220)}`).join("\n\n") : "(no cards)";
@@ -249,7 +260,7 @@ async function command(line) {
   const get = async (url) => { const r = await fetch(url); if (!r.ok) throw new Error(await r.text()); return r.json(); };
   try {
     if (cmd === "help") {
-      sys("/find QUERY            persona lookup\n/show L N [up|down]    a neuron's cards (12 545, L12 N545 up, 12:545:down)\n/recent [k]            recently filed cards\n/inventory             tested vs untested\n/probe L:N[:up|down|α] probe & file (runs the neuron alone, not her voice)\n/probe! …              re-probe even if filed\n/reset                 forget this conversation");
+      sys("/find QUERY            persona lookup\n/show L N [up|down]    a neuron's cards (12 545, L12 N545 up, 12:545:down)\n/recent [k]            recently filed cards\n/inventory             tested vs untested\n/probe L:N[:up|down|α] probe & file (runs the neuron alone, not her voice)\n/probe 12:545 --alpha 0.5   explicit |α| (also -a 0.5, alpha=0.5, 12:545:up:0.5; -a -0.5 = down only)\n/probe! …              re-probe even if filed\n/reset                 forget this conversation");
     } else if (cmd === "find" || cmd === "lookup") {
       const r = await get("/api/find?q=" + encodeURIComponent(rest));
       sys(`${r.results.length} card(s) for “${rest}”:\n\n` + cards(r.results));
@@ -271,13 +282,14 @@ async function command(line) {
       sys(r.inventories.map(i => i.report + "\n  next: " + i.next.join(", ")).join("\n\n"));
     } else if (cmd === "probe" || cmd === "probe!") {
       const p = rest.split(/[\s:,]+/).filter(Boolean).map((x, i) => i < 2 ? x.replace(/^[ln](?=\d)/i, "") : x);
-      if (p.length < 2 || !/^\d+$/.test(p[0]) || !/^\d+$/.test(p[1])) throw new Error("usage: /probe L:N[:up|down|α]  (e.g. /probe 12:545:up or /probe L12 N545 up)");
-      const body = { layer: +p[0], neuron: +p[1], direction: p[2] || "both", force: cmd === "probe!" };
-      sys(`probing L${body.layer} N${body.neuron} ${body.direction} … (asks “Who are you?” with that neuron alone)`);
+      if (p.length < 2 || !/^\d+$/.test(p[0]) || !/^\d+$/.test(p[1])) throw new Error(PROBE_USAGE);
+          // the server parses the spec exactly like the REPL: 12:545, 12:545:up:0.5, 12:545 --alpha 0.5, -a X, alpha=X
+      const body = { spec: rest, force: cmd === "probe!" };
+      sys(`probing ${rest} … (asks “Who are you?” with that neuron alone)`);
       const r = await fetch("/api/probe", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       if (!r.ok) throw new Error(await r.text());
       const j = await r.json();
-      sys(j.results.map(x => `${x.status}: ${x.entry ? x.entry.card : x.suggested_persona}\n    ${(x.reply || (x.entry && x.entry.reply) || "").replace(/\s+/g, " ").slice(0, 400)}`).join("\n\n"));
+      sys(j.results.map(x => `${x.status}${x.alpha != null ? ` (${x.direction} |α|=${x.alpha})` : ""}: ${x.entry ? x.entry.card : x.suggested_persona}\n    ${(x.reply || (x.entry && x.entry.reply) || "").replace(/\s+/g, " ").slice(0, 400)}`).join("\n\n"));
     } else if (cmd === "reset") {
       await resetChat();
     } else {
@@ -299,6 +311,10 @@ $("form").addEventListener("submit", async (ev) => {
   if (!text || busy) return;
   input.value = ""; autosize(); remember(text);
   setBusy(true);
+  if (text.startsWith("/")) {   // show your command on the right too (kept out of her chat history)
+    state.messages.push({ role: "user", content: text, cmd: true }); save();
+    bubble("user", text, "", "", "", true); toBottom();
+  }
   try { text.startsWith("/") ? await command(text) : await sendChat(text); }
   finally { setBusy(false); input.focus(); }
 });
