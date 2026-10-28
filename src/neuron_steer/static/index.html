@@ -41,6 +41,18 @@
   .msg.system .text { font: 13px/1.5 var(--mono); color: var(--muted); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; overflow-x: auto; }
   .msg.error .text { color: var(--err); }
   .meta { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  details.thoughts { margin: 2px 0 8px; }
+  details.thoughts[hidden] { display: none; }
+  details.thoughts summary { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; list-style: none; user-select: none;
+    font: 13px var(--sans); color: var(--muted); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 3px 10px; }
+  details.thoughts summary::-webkit-details-marker { display: none; }
+  details.thoughts summary::after { content: "›"; display: inline-block; transition: transform .15s; }
+  details.thoughts[open] summary::after { transform: rotate(90deg); }
+  details.thoughts summary:hover { color: var(--ink); border-color: var(--accent); }
+  details.thoughts.live summary { color: var(--accent); }
+  details.thoughts.live summary span { animation: pulse 1.2s infinite; }
+  details.thoughts .thought-text { white-space: pre-wrap; word-wrap: break-word; margin: 8px 0 0; padding: 2px 0 2px 12px;
+    border-left: 2px solid var(--line); color: var(--muted); font: 14px/1.55 var(--sans); max-height: 340px; overflow-y: auto; }
   .cursor::after { content: "▍"; color: var(--accent); animation: pulse 1s infinite; }
   .empty { text-align: center; color: var(--muted); margin-top: 12vh; font-family: var(--serif); }
   .empty h2 { font-weight: 500; color: var(--ink); }
@@ -83,17 +95,33 @@ const save = () => localStorage.setItem(KEY, JSON.stringify(state));
 const atBottom = () => scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 80;
 const toBottom = () => { scroller.scrollTop = scroller.scrollHeight; };
 
-function bubble(role, text, meta) {
+function thoughtLabel(m) {
+  if (!m.thoughts) return "Thoughts";
+  return m.thought_secs ? `Thought for ${m.thought_secs} second${m.thought_secs === 1 ? "" : "s"}` : "Thoughts";
+}
+
+function setThoughts(el, thoughts, label, live) {
+  const d = el.querySelector("details.thoughts");
+  if (!d) return;
+  d.hidden = !thoughts && !live;
+  d.classList.toggle("live", !!live);
+  d.querySelector("summary span").textContent = label;
+  d.querySelector(".thought-text").textContent = thoughts || "";
+}
+
+function bubble(role, text, meta, thoughts, label) {
   const empty = log.querySelector(".empty"); if (empty) empty.remove();
   const el = document.createElement("div");
   el.className = "msg " + role;
   const name = role === "user" ? "You" : role === "assistant" ? "Librarian" : role === "error" ? "Error" : "Catalogue";
-  el.innerHTML = `<div class="avatar"></div><div class="body"><div class="who"></div><div class="text"></div><div class="meta"></div></div>`;
+  const think = role === "assistant" ? `<details class="thoughts" hidden><summary><span>Thoughts</span></summary><div class="thought-text"></div></details>` : "";
+  el.innerHTML = `<div class="avatar"></div><div class="body"><div class="who"></div>${think}<div class="text"></div><div class="meta"></div></div>`;
   el.querySelector(".avatar").textContent = role === "user" ? "Y" : role === "assistant" ? "L" : "§";
   el.querySelector(".who").textContent = name;
   el.querySelector(".text").textContent = text;
   el.querySelector(".meta").textContent = meta || "";
   if (role === "error") el.classList.add("system");
+  if (thoughts) setThoughts(el, thoughts, label || "Thoughts", false);
   log.appendChild(el);
   return el;
 }
@@ -104,7 +132,7 @@ function renderAll() {
     log.innerHTML = `<div class="empty"><h2>Welcome to the Library.</h2>
       <p>The chief librarian keeps the catalogue of neuron personas.<br>Ask her anything — or try <code>/find coffee</code>, <code>/inventory</code>.</p></div>`;
   }
-  for (const m of state.messages) bubble(m.role, m.content, m.meta);
+  for (const m of state.messages) bubble(m.role, m.content, m.meta, m.thoughts, thoughtLabel(m));
   toBottom();
 }
 
@@ -134,7 +162,7 @@ async function sendChat(text) {
   her.querySelector(".meta").textContent = "thinking…";
   const body = { message: text, session_id: state.session_id };
   if (!seeded) body.history = history;
-  let acc = "", done = null;
+  let acc = "", thought = "", done = null, t0 = Date.now(), tEnd = null;
   try {
     const res = await fetch("/api/chat/stream", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     if (!res.ok || !res.body) throw new Error((await res.text()) || res.statusText);
@@ -151,7 +179,15 @@ async function sendChat(text) {
         const ev = JSON.parse(chunk.slice(6));
         const stick = atBottom();
         if (ev.type === "queued") her.querySelector(".meta").textContent = ev.ready ? "writing…" : "waiting for the model to load…";
-        else if (ev.type === "delta") { acc += ev.text; t.textContent = acc.replace(/^\s+/, ""); her.querySelector(".meta").textContent = ""; }
+        else if (ev.type === "thought") {
+          thought += ev.text;
+          setThoughts(her, thought.replace(/^\s+/, ""), "Thinking…", true);
+          her.querySelector(".meta").textContent = "";
+        }
+        else if (ev.type === "delta") {
+          if (thought && tEnd === null) { tEnd = Date.now(); setThoughts(her, thought.trim(), thoughtLabel({ thoughts: 1, thought_secs: Math.max(1, Math.round((tEnd - t0) / 1000)) }), false); }
+          acc += ev.text; t.textContent = acc.replace(/^\s+/, ""); her.querySelector(".meta").textContent = "";
+        }
         else if (ev.type === "done") done = ev;
         else if (ev.type === "error") throw new Error(ev.error);
         if (stick) toBottom();
@@ -162,8 +198,14 @@ async function sendChat(text) {
     t.textContent = done.reply;
     const meta = `${done.n_tokens} tokens${done.stopped_on_repeat ? " · stopped on repeat" : ""}`;
     her.querySelector(".meta").textContent = meta;
+    const msg = { role: "assistant", content: done.reply, meta };
+    if (done.thoughts) {
+      msg.thoughts = done.thoughts;
+      msg.thought_secs = Math.max(1, Math.round(((tEnd || Date.now()) - t0) / 1000));
+    }
+    setThoughts(her, msg.thoughts || "", thoughtLabel(msg), false);
     state.session_id = done.session_id; seeded = true;
-    state.messages.push({ role: "assistant", content: done.reply, meta }); save();
+    state.messages.push(msg); save();
   } catch (e) {
     her.remove();
     state.messages.pop(); save();   // drop the unanswered user turn so history stays paired

@@ -2,8 +2,10 @@
 
 A small FastAPI app serving one static chat page plus a JSON API:
 
-* ``POST /api/chat``         {message, session_id?, history?} -> her reply (L9:367:down + extras)
-* ``POST /api/chat/stream``  same body, Server-Sent Events: ``delta`` pieces then ``done``
+* ``POST /api/chat``         {message, session_id?, history?} -> her ``reply`` (L9:367:down + extras)
+                             and, apart from it, her private ``thoughts``
+* ``POST /api/chat/stream``  same body, Server-Sent Events: ``thought`` pieces (her <think> block),
+                             ``delta`` pieces (the spoken reply), then ``done``
 * ``POST /api/reset``        {session_id} -> forget that conversation
 * ``POST /api/probe``        {layer, neuron, direction?, alpha?, force?, file?, persona?, tags?}
 * ``GET  /api/inventory``, ``/api/find?q=``, ``/api/open?layer=&neuron=``, ``/api/recent?k=``
@@ -99,13 +101,13 @@ class LibrarianServer:
                             if isinstance(m, dict) and m.get("role") in ("user", "assistant") and "content" in m]
         return sid, s
 
-    def chat_sync(self, body: dict, on_text=None) -> dict:
+    def chat_sync(self, body: dict, on_text=None, on_thought=None) -> dict:
         msg = str(body.get("message") or "").strip()
         if not msg:
             raise ValueError("empty message")
         sid, s = self._session(body.get("session_id"), body.get("history"))
-        res = s.chat(msg, on_text=on_text)
-        return {"session_id": sid, "reply": res.text, "n_tokens": res.n_new_tokens,
+        res = s.chat(msg, on_text=on_text, on_thought=on_thought)
+        return {"session_id": sid, "reply": res.text, "thoughts": res.thoughts, "n_tokens": res.n_new_tokens,
                 "stopped_on_repeat": res.stopped_on_repeat, "turns": len(s.history) // 2,
                 "steers": [_steer(x) for x in s.steers],
                 "applied": [str(a) for a in res.applied]}
@@ -183,6 +185,7 @@ def create_app(args: argparse.Namespace, load_model: bool = True):
                 "librarian": {"layer": L, "neuron": N, "direction": d, "alpha": -abs(args.librarian_alpha)},
                 "extra_steers": [_steer(s) for s in getattr(args, "extra_steers", [])],
                 "probe_alpha": args.alpha, "context": not args.no_context,
+                "think_budget": getattr(args, "think_budget", 0),
                 "catalogue": str(_db_path(args))}
 
     @app.post("/api/chat")
@@ -197,9 +200,12 @@ def create_app(args: argparse.Namespace, load_model: bool = True):
         def on_text(t: str) -> None:
             loop.call_soon_threadsafe(q.put_nowait, {"type": "delta", "text": t})
 
+        def on_thought(t: str) -> None:
+            loop.call_soon_threadsafe(q.put_nowait, {"type": "thought", "text": t})
+
         def job() -> None:
             try:
-                r = srv.chat_sync(body, on_text=on_text)
+                r = srv.chat_sync(body, on_text=on_text, on_thought=on_thought)
                 loop.call_soon_threadsafe(q.put_nowait, {"type": "done", **r})
             except Exception as e:  # noqa: BLE001 - reported to the client
                 loop.call_soon_threadsafe(q.put_nowait, {"type": "error", "error": str(e)})

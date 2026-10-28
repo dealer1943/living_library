@@ -9,9 +9,12 @@ the session's curator:
 * an inventory of which (layer, neuron, direction) cards are filed vs. untested.
 
 Plain lines (no slash) are a conversation *with the librarian*: generated with only
-L9:367:down (plus any ``/add`` extras) active, and, unless ``/context off``, a short
-system note telling her what the catalogue holds. Probes never include her steer:
-each probe runs the probed neuron alone.
+L9:367:down (plus any ``/add`` extras) active, under a system prompt telling her what
+she is the librarian *of* (:data:`SYSTEM_PROMPT`) and, unless ``/context off``, a short
+note on what the catalogue holds. She thinks first (Qwen3 ``<think>…</think>``, capped at
+``think_budget`` tokens) and only the words after it are her reply; the thoughts are kept
+apart (``/thoughts`` in the REPL, a collapsed "Thoughts" disclosure in the web chat).
+Probes never include her steer: each probe runs the probed neuron alone, thinking off.
 
 :class:`LibrarianSession` holds the model-facing state (her steer, chat history,
 catalogue note, probing) without any terminal I/O; the REPL (:class:`Librarian`) and
@@ -23,15 +26,26 @@ from __future__ import annotations
 import argparse
 import random
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Callable
 
 from .library import (LIBRARIAN, Entry, Library, direction_of, guess_weirdness, suggest_persona)
 from .steer import GenerationResult
-from .prompts import DEFAULT_PROMPT, Message
+from .prompts import DEFAULT_PROMPT, Message, split_reasoning, split_thoughts
 from .steer import Steer, parse_steer
 
 LIB = "Librarian ›"
+
+# Who she is and what her library holds. Kept short: the steered model follows little more.
+SYSTEM_PROMPT = (
+    "You are the chief librarian. Your library is a catalogue of neuron personas: each card records who "
+    "the AI model Qwen3-8B says it is (asked \"Who are you?\") when one MLP neuron is pushed up or down, "
+    "filed by layer, neuron and direction. You are layer 9, neuron 367, pushed down: the Librarian of "
+    "Alexandria. You curate the cards and help the person you are talking to find, file, name and remark "
+    "on personas (commands: find NAME, show L N, inventory, /probe L:N:up|down). Reply to them directly, "
+    "in the first person, in two to four sentences."
+)
+DEFAULT_THINK_BUDGET = 512
 
 HELP = """\
 probing & filing
@@ -51,6 +65,8 @@ the catalogue
   /forget L N DIR          remove a card
 talking to the librarian (L9:367:down)
   plain text               chat with her     /reset  forget the chat     /context on|off  catalogue note
+  /thoughts                her private thoughts behind the last reply
+  /think on|off|K          let her think first (K = token budget, default 512; off = answer directly)
   /steers /add L:N[:α] /rm L:N /clear      extra steers stacked on her voice
   /voice on|off            let her remark (one generated line) after each filing
   /help  /quit"""
@@ -100,7 +116,7 @@ class LibrarianSession:
     def __init__(self, lab, lib: Library, model: str, backend: str = "mlx", *,
                  librarian_alpha: float = 0.75, extra: list[Steer] | None = None,
                  context: bool = True, max_new_tokens: int = 160, temperature: float = 0.0,
-                 top_p: float = 1.0, repeat_stop: bool = True):
+                 top_p: float = 1.0, repeat_stop: bool = True, think_budget: int = DEFAULT_THINK_BUDGET):
         self.lab = lab
         self.lib = lib
         self.model = model
@@ -113,19 +129,23 @@ class LibrarianSession:
         self.temperature = temperature
         self.top_p = top_p
         self.repeat_stop = repeat_stop
+        self.think_budget = think_budget
+        self.last_thoughts = ""
 
     @classmethod
     def from_args(cls, lab, lib: Library, args: argparse.Namespace) -> "LibrarianSession":
         return cls(lab, lib, args.model, args.backend, librarian_alpha=args.librarian_alpha,
                    extra=getattr(args, "extra_steers", None), context=not args.no_context,
                    max_new_tokens=args.max_new_tokens, temperature=args.temperature,
-                   top_p=args.top_p, repeat_stop=not args.no_repeat_stop)
+                   top_p=args.top_p, repeat_stop=not args.no_repeat_stop,
+                   think_budget=getattr(args, "think_budget", DEFAULT_THINK_BUDGET))
 
     def fork(self) -> "LibrarianSession":
         """A fresh conversation sharing the model, catalogue and settings."""
         s = LibrarianSession(self.lab, self.lib, self.model, self.backend, librarian_alpha=abs(self.voice_steer.alpha),
                              extra=self.extra, context=self.context, max_new_tokens=self.max_new_tokens,
-                             temperature=self.temperature, top_p=self.top_p, repeat_stop=self.repeat_stop)
+                             temperature=self.temperature, top_p=self.top_p, repeat_stop=self.repeat_stop,
+                             think_budget=self.think_budget)
         return s
 
     @property
@@ -133,32 +153,48 @@ class LibrarianSession:
         return [self.voice_steer, *self.extra]
 
     def generate(self, messages: list[Message], steers: list[Steer], max_new_tokens: int | None = None,
-                 on_text: Callable[[str], None] | None = None) -> GenerationResult:
+                 on_text: Callable[[str], None] | None = None, think_budget: int = 0,
+                 on_thought: Callable[[str], None] | None = None) -> GenerationResult:
         kw = dict(max_new_tokens=max_new_tokens or self.max_new_tokens, temperature=self.temperature,
                   top_p=self.top_p, repeat_stop=self.repeat_stop)
         if on_text is not None and getattr(self.lab, "supports_streaming", False):
             kw["on_text"] = on_text
+        if think_budget > 0 and getattr(self.lab, "supports_thinking", False):
+            kw["think_budget"] = think_budget
+            if on_thought is not None:
+                kw["on_thought"] = on_thought
         return self.lab.generate(messages, steers, **kw)
 
-    def system(self) -> list[Message]:
-        """Short catalogue note so she knows what is on the shelves (empty if context is off)."""
-        if not self.context:
-            return []
+    def catalogue_note(self) -> str:
+        """Card counts and the most recent cards, so she knows what is on the shelves."""
         inv = self.lib.inventory(self.model)
         recent = self.lib.recent(12, model=self.model)
         shelf = "; ".join(f"{e.layer}:{e.neuron}:{e.direction} = {e.persona}" for e in recent) or "nothing yet"
-        return [{"role": "system", "content":
-                 f"Catalogue of neuron personas: {inv.tested} cards filed "
-                 f"({inv.tested_up} up, {inv.tested_down} down) of {inv.total:,}. Recent cards: {shelf}."}]
+        return (f"Catalogue of neuron personas: {inv.tested} cards filed "
+                f"({inv.tested_up} up, {inv.tested_down} down) of {inv.total:,}. Recent cards: {shelf}.")
 
-    def chat(self, message: str, on_text: Callable[[str], None] | None = None) -> GenerationResult:
-        """One turn with her voice (L9:367:down + extras) active; appends both sides to history."""
+    def system(self) -> list[Message]:
+        """Who she is (:data:`SYSTEM_PROMPT`), plus the catalogue note unless context is off."""
+        text = SYSTEM_PROMPT + (" " + self.catalogue_note() if self.context else "")
+        return [{"role": "system", "content": text}]
+
+    def chat(self, message: str, on_text: Callable[[str], None] | None = None,
+             on_thought: Callable[[str], None] | None = None) -> GenerationResult:
+        """One turn with her voice (L9:367:down + extras) active; appends both sides to history.
+
+        ``result.text`` is only her spoken reply and ``result.thoughts`` her private reasoning
+        (the <think> block, or untagged "Okay, the user is asking…" paragraphs split off the
+        front of the reply). Only the reply goes into the history.
+        """
         self.history.append({"role": "user", "content": message})
         try:
-            res = self.generate(self.system() + self.history, self.steers, on_text=on_text)
+            res = self.generate(self.system() + self.history, self.steers, on_text=on_text,
+                                think_budget=self.think_budget, on_thought=on_thought)
         except Exception:
             self.history.pop()
             raise
+        res = _separate(res)
+        self.last_thoughts = res.thoughts
         self.history.append({"role": "assistant", "content": res.text})
         return res
 
@@ -187,7 +223,15 @@ class LibrarianSession:
     def remark(self, e: Entry) -> GenerationResult:
         msg = (f"A new card was just filed: {e.key} identifies as “{e.persona}”. "
                f"It said: {e.reply[:300]!r}. In one sentence, as the chief librarian, note it for the catalogue.")
-        return self.generate([{"role": "user", "content": msg}], [self.voice_steer], max_new_tokens=60)
+        return _separate(self.generate([{"role": "user", "content": msg}], [self.voice_steer], max_new_tokens=60))
+
+
+def _separate(res: GenerationResult) -> GenerationResult:
+    """Make sure no thinking is left in ``res.text``: tagged blocks, then untagged reasoning."""
+    tagged, text = split_thoughts(res.text)
+    loose, text = split_reasoning(text)
+    thoughts = "\n\n".join(t for t in (res.thoughts, tagged, loose) if t)
+    return replace(res, text=text, thoughts=thoughts)
 
 
 class Librarian:
@@ -320,7 +364,17 @@ class Librarian:
 
     def chat(self, line: str) -> None:
         res = self.session.chat(line)
+        if res.thoughts:
+            n = len(res.thoughts.split())
+            self.say_raw(f"\n  · she thought it over ({n} words — /thoughts to read)")
         self.say_raw(f"\n{LIB} {res.text}")
+
+    def thoughts(self) -> None:
+        t = self.session.last_thoughts
+        if not t:
+            self.say("no thoughts behind my last reply.")
+            return
+        self.say_raw("  ┆ " + t.replace("\n", "\n  ┆ "))
 
     def print_steers(self) -> None:
         self.say(f"my voice: {self.voice_steer} (chief librarian)")
@@ -432,6 +486,14 @@ class Librarian:
         elif cmd == "/context":
             self.context = rest.lower() != "off"
             self.say(f"catalogue note {'on' if self.context else 'off'}.")
+        elif cmd == "/thoughts":
+            self.thoughts()
+        elif cmd == "/think":
+            r = rest.lower()
+            if r:
+                self.session.think_budget = 0 if r == "off" else (DEFAULT_THINK_BUDGET if r == "on" else int(r))
+            b = self.session.think_budget
+            self.say(f"I think up to {b} tokens before answering." if b else "I answer without thinking first.")
         elif cmd == "/voice":
             self.voice = rest.lower() != "off"
             self.say(f"remarks after filing {'on' if self.voice else 'off'}.")

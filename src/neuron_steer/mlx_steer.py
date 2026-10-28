@@ -20,10 +20,12 @@ from typing import Any, Callable, Iterator
 import mlx.core as mx
 import mlx.nn as nn
 
-from .prompts import Message, render_chat, strip_think
+from .prompts import Message, render_chat, split_thoughts, strip_think
 from .steer import AppliedSteer, GenerationResult, Steer
 
 DEFAULT_MLX_MODEL = "mlx-community/Qwen3-8B-4bit"
+# appended to thoughts that hit the think budget before </think> (Qwen's own budget-forcing line)
+FORCE_ANSWER = "\nConsidering the limited time, I have to give the answer based on the thinking directly now.\n"
 
 
 def is_mlx_model(name: str) -> bool:
@@ -71,6 +73,7 @@ class MLXNeuronSteer:
     """Drop-in counterpart of :class:`neuron_steer.steer.NeuronSteer` using mlx-lm."""
 
     supports_streaming = True  # generate(..., on_text=cb) calls cb with each decoded text piece
+    supports_thinking = True   # generate(..., think_budget=k) lets Qwen3 think in <think>…</think> first
 
     def __init__(self, model_name: str = DEFAULT_MLX_MODEL, **_: Any):
         from mlx_lm import load
@@ -102,8 +105,8 @@ class MLXNeuronSteer:
             if not 0 <= s.neuron < self.n_neurons:
                 raise ValueError(f"{s}: neuron must be in [0, {self.n_neurons - 1}]")
 
-    def encode(self, messages: list[Message]) -> list[int]:
-        text = render_chat(self.tokenizer, messages, enable_thinking=False)
+    def encode(self, messages: list[Message], enable_thinking: bool = False) -> list[int]:
+        text = render_chat(self.tokenizer, messages, enable_thinking=enable_thinking)
         return list(self.tokenizer.encode(text, add_special_tokens=False))
 
     # -- r_L / ‖W_down[:,n]‖ ----------------------------------------------------------
@@ -184,30 +187,84 @@ class MLXNeuronSteer:
         top_p: float = 1.0,
         repeat_stop: bool = True,
         on_text: Callable[[str], None] | None = None,
+        think_budget: int = 0,
+        on_thought: Callable[[str], None] | None = None,
     ) -> GenerationResult:
+        """Steered generation. ``think_budget=0`` (default): thinking off, the template's empty
+        <think></think> and only the reply. ``think_budget=k``: thinking on — Qwen3 thinks inside
+        <think>…</think> for up to k tokens (closed for it if it runs over or loops), then the reply
+        gets ``max_new_tokens``. Thought pieces go to ``on_thought``, reply pieces to ``on_text``;
+        ``result.thoughts`` / ``result.text`` keep them apart. The same steers are active throughout.
+        """
         from mlx_lm import stream_generate
         from mlx_lm.sample_utils import make_sampler
 
         steers = steers or []
-        ids = self.encode(messages)
+        thinking = think_budget > 0
+        ids = self.encode(messages, enable_thinking=thinking)
         applied = self.coefficients(steers, ids) if steers else []
         sampler = make_sampler(temp=temperature, top_p=top_p)
+        tok = self.tokenizer
+        t_open, t_close = (tok.convert_tokens_to_ids(t) for t in ("<think>", "</think>"))
 
+        def run(prompt: list[int], budget: int) -> Iterator[tuple[int, str]]:
+            """(token, text piece) until EOS, ``budget`` tokens, or an exact repeat."""
+            out: list[int] = []
+            for resp in stream_generate(self.model, tok, mx.array(prompt), max_tokens=budget, sampler=sampler):
+                if resp.finish_reason == "stop" and resp.token in tok.eos_token_ids:
+                    return
+                out.append(int(resp.token))
+                yield out[-1], resp.text
+                if repeat_stop and _repeats(out):
+                    return
+
+        def say(t: int, piece: str) -> None:
+            gen.append(t)
+            if on_text is not None and piece:
+                on_text(piece)
+
+        thought: list[int] = []
         gen: list[int] = []
-        stopped = False
         with self.hooks(applied):
-            for resp in stream_generate(self.model, self.tokenizer, mx.array(ids),
-                                        max_tokens=max_new_tokens, sampler=sampler):
-                if resp.finish_reason == "stop" and resp.token in self.tokenizer.eos_token_ids:
-                    break
-                gen.append(int(resp.token))
-                if repeat_stop and _repeats(gen):
-                    stopped = True
-                    break
-                if on_text is not None and resp.text:
-                    on_text(resp.text)
-        text = strip_think(self.tokenizer.decode(gen, skip_special_tokens=True))
-        return GenerationResult(text, applied, len(gen), stopped)
+            if not thinking:
+                for t, piece in run(ids, max_new_tokens):
+                    say(t, piece)
+            else:
+                # phase 1: <think> … </think>; if she skips the tag she is answering directly
+                mode = "start"
+                for t, piece in run(ids, think_budget + max_new_tokens):
+                    if mode == "start":
+                        mode = "think" if t == t_open else "reply"
+                        if mode == "think":
+                            continue
+                    if mode == "think":
+                        if t == t_close:
+                            break
+                        thought.append(t)
+                        if on_thought is not None and piece:
+                            on_thought(piece)
+                        if len(thought) >= think_budget:
+                            break
+                    else:
+                        say(t, piece)
+                        if len(gen) >= max_new_tokens:
+                            break
+                if mode == "think":
+                    # phase 2: the spoken reply, after her </think> (closed for her if she ran over)
+                    over = len(thought) >= think_budget
+                    nl = "" if tok.decode(thought[-1:]).endswith("\n") else "\n"
+                    close = tok.encode(nl + (FORCE_ANSWER if over else "") + "</think>\n\n", add_special_tokens=False)
+                    for t, piece in run(ids + [t_open] + thought + close, max_new_tokens):
+                        say(t, piece)
+        stopped = repeat_stop and _repeats(gen)
+        raw = tok.decode(gen, skip_special_tokens=True)
+        thoughts = tok.decode(thought, skip_special_tokens=True).strip() if thought else ""
+        if thinking or "<think>" in raw or "</think>" in raw:
+            extra, text = split_thoughts(raw)
+            thoughts = "\n\n".join(x for x in (thoughts, extra) if x)
+        else:
+            text = strip_think(raw)
+        return GenerationResult(text, applied, len(thought) + len(gen), stopped, thoughts=thoughts)
 
 
 def _repeats(gen: list[int], min_block: int = 8) -> bool:

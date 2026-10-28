@@ -129,6 +129,7 @@ class GenerationResult:
     applied: list[AppliedSteer] = field(default_factory=list)
     n_new_tokens: int = 0
     stopped_on_repeat: bool = False
+    thoughts: str = ""  # private reasoning (<think>…</think>) kept apart from the spoken ``text``
 
 
 # --------------------------------------------------------------------- device/dtype

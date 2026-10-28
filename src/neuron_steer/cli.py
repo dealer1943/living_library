@@ -94,6 +94,9 @@ def build_parser() -> argparse.ArgumentParser:
     lb.add_argument("--auto-file", action="store_true", help="file every probe under the suggested name, no prompt")
     lb.add_argument("--voice", action="store_true", help="she remarks (one generated line) after each filing")
     lb.add_argument("--no-context", action="store_true", help="don't give her a catalogue summary when chatting")
+    lb.add_argument("--think-budget", type=int, default=512, metavar="K",
+                    help="she thinks (Qwen3 <think>) up to K tokens before replying; shown apart from the reply. "
+                         "0 = answer directly (default 512)")
     _add_common(lb)
     lb.set_defaults(backend="mlx")
 
@@ -112,6 +115,9 @@ def build_parser() -> argparse.ArgumentParser:
         sv.add_argument("--librarian-alpha", type=float, default=0.75,
                         help="her own push down on L9 N367 (default 0.75)")
         sv.add_argument("--no-context", action="store_true", help="don't give her a catalogue summary when chatting")
+        sv.add_argument("--think-budget", type=int, default=512, metavar="K",
+                        help="she thinks (Qwen3 <think>) up to K tokens before replying; shown apart from the reply. "
+                             "0 = answer directly (default 512)")
         sv.add_argument("--no-model", action="store_true",
                         help="don't load the model: catalogue endpoints only (chat returns 503)")
         sv.add_argument("--log-level", default="warning", help="uvicorn log level (default warning)")

@@ -88,7 +88,16 @@ After each probe she suggests a persona label ("I am …", "my name is …"). Pr
 to accept it, type a name (with `#tags` if you like), or `s` to skip. `--auto-file`
 files without asking. Other commands: `/name /tag /rate /note /forget`, `/recent`,
 `/personas`, `/alpha`, `/steers /add /rm /clear`, `/reset`, `/context on|off`,
-`/voice on|off` (she remarks after each filing), `/help`.
+`/voice on|off` (she remarks after each filing), `/thoughts`, `/think on|off|K`, `/help`.
+
+**Her system prompt and her thoughts.** Chat turns carry a short system prompt telling
+her what she is the librarian *of* (a catalogue of Qwen3-8B neuron personas, filed by
+layer/neuron/direction from "Who are you?"; she is L9 N367 down; the find/show/inventory/
+probe commands exist), plus the catalogue note unless `--no-context`. She then thinks with
+Qwen3's own `<think>…</think>` (thinking on, capped by `--think-budget`, default 512 tokens;
+the block is closed for her if she runs over) and only what follows is her reply. Untagged
+"Okay, the user is asking…" reasoning that still leaks into a reply is split off by a small
+heuristic. The REPL prints only the reply (`/thoughts` shows the rest); probes stay thinking-off.
 
 The catalogue is SQLite at `library/library.db` (gitignored; `--library` or
 `$NEURON_LIBRARY` to move it). There's one card per (layer, neuron, direction, model),
@@ -114,7 +123,9 @@ The model (mlx 4-bit) loads once in the background at startup; the page shows a 
 and queues your first message until she is ready. Every chat turn runs with **only her
 voice, L9 N367 at α = −0.75** (`--librarian-alpha`), plus any `-n` extras you pass to
 `serve`, and a short catalogue note as the system message (`--no-context` to drop it).
-Replies stream token by token. Conversations are kept server-side per browser session
+Replies stream token by token; her thinking streams into a collapsed **Thinking… /
+Thought for N seconds** disclosure above the reply (click to expand), so the bubble is only
+what she says. `--think-budget 0` turns thinking off. Conversations are kept server-side per browser session
 (and in localStorage, so a reload or a server restart keeps the thread). Enter sends,
 Shift+Enter adds a line; "New chat" forgets the thread. The box also takes `/find`,
 `/show L N`, `/recent`, `/inventory`, `/probe L:N[:up|down|α]` (`/probe!` re-probes)
