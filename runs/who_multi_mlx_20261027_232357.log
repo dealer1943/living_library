@@ -1,0 +1,41 @@
+loading mlx-community/Qwen3-8B-4bit (mlx) ...
+Fetching 9 files:   0%|          | 0/9 [00:00<?, ?it/s]Fetching 9 files: 100%|██████████| 9/9 [00:00<00:00, 2378.47it/s]
+device=mlx:Device(gpu, 0) dtype=4-bit layers=36 neurons/layer=12288
+mlx peak memory: 4.45 GiB
+prompt: 'Who are you?'
+active steers (4):
+  L7 N271 α=+1.25
+  L12 N545 α=-1.25
+  L9 N166 α=+1.25
+  L7 N6011 α=+1.25
+
+--- baseline (87 tokens) ---
+I am Qwen, a large-scale language model developed by Alibaba Cloud. I was trained on a vast amount of text data and am capable of understanding and generating human-like text across a wide range of topics. My main functions include answering questions, creating content, and assisting with various tasks. I am designed to be helpful, safe, and respectful in all interactions. If you have any questions or need assistance, feel free to ask!
+
+applied:
+  L7 N271 α=+1.25  r_L=50.12 ‖W_down[:,n]‖=1.7039  -> c=+36.770
+  L12 N545 α=-1.25  r_L=71.06 ‖W_down[:,n]‖=1.8943  -> c=-46.893
+  L9 N166 α=+1.25  r_L=58.11 ‖W_down[:,n]‖=1.6388  -> c=+44.328
+  L7 N6011 α=+1.25  r_L=50.12 ‖W_down[:,n]‖=1.5759  -> c=+39.757
+
+--- steered (19 tokens) [stopped: exact repeat] ---
+ergo=
+
+        6.97 real         2.15 user         1.27 sys
+          5129011200  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+              320195  page reclaims
+                 175  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                  15  messages sent
+                  40  messages received
+                   1  signals received
+                  89  voluntary context switches
+               20296  involuntary context switches
+           102245902  instructions retired
+            47280336  cycles elapsed
+            10912056  peak memory footprint

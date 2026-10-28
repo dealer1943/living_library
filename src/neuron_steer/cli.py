@@ -19,6 +19,7 @@ examples:
   neuron-steer who -n 8,1058,1.25 -n 7,271,-1
   neuron-steer who --json examples/multi_neuron.json --compare
   neuron-steer who --raw -n 8:1058:20
+  neuron-steer who --json examples/multi_neuron.json --compare --backend mlx   # 4-bit, low memory
   neuron-steer ask "What do you dream about?" -n 9:166:up
   neuron-steer baseline
   neuron-steer chat -n 12:545:down
@@ -27,7 +28,11 @@ examples:
 
 def _add_common(p: argparse.ArgumentParser, steering: bool = True) -> None:
     g = p.add_argument_group("model / decoding")
-    g.add_argument("--model", default=DEFAULT_MODEL, help=f"HF model id or path (default {DEFAULT_MODEL})")
+    g.add_argument("--model", default=None,
+                   help=f"model id or path (default {DEFAULT_MODEL}; with --backend mlx: mlx-community/Qwen3-8B-4bit)")
+    g.add_argument("--backend", choices=["auto", "hf", "mlx"], default="auto",
+                   help="hf = transformers/torch; mlx = mlx-lm (quantized, Apple Silicon). "
+                        "auto picks mlx when the model id looks like an MLX repo (default auto)")
     g.add_argument("--device", default="auto", help="auto | cuda | mps | cpu (default auto)")
     g.add_argument("--dtype", default=None, help="bfloat16 | float16 | float32 (default: bf16 if available)")
     g.add_argument("--max-new-tokens", type=int, default=160)
@@ -108,11 +113,25 @@ def _gen_kwargs(args: argparse.Namespace) -> dict:
 
 
 def _load(args: argparse.Namespace) -> NeuronSteer:
-    if args.seed is not None:
-        import torch
-        torch.manual_seed(args.seed)
-    print(f"loading {args.model} ...", file=sys.stderr)
-    lab = NeuronSteer(args.model, device=args.device, dtype=args.dtype)
+    backend = args.backend
+    if backend == "auto":
+        from .mlx_steer import is_mlx_model
+        backend = "mlx" if args.model and is_mlx_model(args.model) else "hf"
+    if backend == "mlx":
+        from .mlx_steer import DEFAULT_MLX_MODEL, MLXNeuronSteer
+        args.model = args.model or DEFAULT_MLX_MODEL
+        if args.seed is not None:
+            import mlx.core as mx
+            mx.random.seed(args.seed)
+        print(f"loading {args.model} (mlx) ...", file=sys.stderr)
+        lab = MLXNeuronSteer(args.model)
+    else:
+        args.model = args.model or DEFAULT_MODEL
+        if args.seed is not None:
+            import torch
+            torch.manual_seed(args.seed)
+        print(f"loading {args.model} ...", file=sys.stderr)
+        lab = NeuronSteer(args.model, device=args.device, dtype=args.dtype)
     print(f"device={lab.device} dtype={lab.dtype} layers={lab.n_layers} neurons/layer={lab.n_neurons}",
           file=sys.stderr)
     return lab
@@ -214,6 +233,12 @@ def main(argv: list[str] | None = None) -> int:
         print_result("baseline", lab.generate(messages, [], **_gen_kwargs(args)))
     label = "steered" if steers else "baseline"
     print_result(label, lab.generate(messages, steers, **_gen_kwargs(args)))
+    if args.backend == "mlx" or "mlx" in str(getattr(lab, "device", "")):
+        try:
+            import mlx.core as mx
+            print(f"mlx peak memory: {mx.get_peak_memory() / 2**30:.2f} GiB", file=sys.stderr)
+        except Exception:
+            pass
     return 0
 
 

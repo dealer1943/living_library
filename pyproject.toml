@@ -8,6 +8,8 @@ dependencies = [
     "torch>=2.2",
     "transformers>=4.51",
     "accelerate>=0.30",
+    "mlx>=0.32.4",
+    "mlx-lm>=0.31.3",
 ]
 
 [project.scripts]
