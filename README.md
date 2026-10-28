@@ -1,9 +1,50 @@
 # Living Library
 
-A local lab for pushing **one or many** MLP neurons in Qwen3-8B and asking it
-"Who are you?" (or anything else). It reproduces the single-neuron method of the
+> **Status: pre-MVP.** Feature lineage lives in [`features/`](features/README.md).
+
+**Living Library** is a local lab and a chat interface for the *personas that live inside
+single neurons* of a language model. Push one MLP neuron of Qwen3-8B up or down and ask
+"Who are you?" — the model answers as someone else: a librarian, a disease, a coffee bean.
+The Library catalogues those personas and lets you talk to them:
+
+- **The chief librarian** (Layer 9 · Neuron 367 pushed down — the Librarian of Alexandria)
+  runs the catalogue: she probes neurons, files each reply under a persona name, and answers
+  questions about the shelves. You can put a different neuron behind her desk.
+- **Check out a neuron** like a book and chat with that persona in its own side tab; check it
+  back in with five keywords (or let the Librarian write them from the chat).
+- **Hybrid checkouts**: several neurons at once — blended into one voice with `--mix`, or as a
+  group chat where every persona and you share one context.
+- A web chat with a slash-command palette, color-coded commands, skins, and exports of the
+  active neurons/alphas and of every chat.
+
+It reproduces the single-neuron method of the
 [Neuron Persona Library](https://qwen-neurons-site.vercel.app/) and lets you stack
 several neurons at once.
+
+## The model (not included)
+
+This repository **never ships model weights**. Development uses
+[**`mlx-community/Qwen3-8B-4bit`**](https://huggingface.co/mlx-community/Qwen3-8B-4bit)
+(MLX 4-bit, ~4.6 GB, Apple Silicon) — the web chat and the librarian default to it. The
+PyTorch backend uses [`Qwen/Qwen3-8B`](https://huggingface.co/Qwen/Qwen3-8B) (bf16, ~16 GB).
+Both download from Hugging Face into `~/.cache/huggingface` the first time you run, or ahead of time:
+
+```bash
+uv run hf download mlx-community/Qwen3-8B-4bit      # what we develop on
+# or: uv run hf download Qwen/Qwen3-8B               # torch backend
+```
+
+Qwen3 is released by the Qwen team under its own license (see the model card); you download it
+from them, not from here.
+
+## Quick start (web chat)
+
+```bash
+git clone https://github.com/dealer1943/living_library && cd living_library
+uv sync
+uv run neuron-steer serve --port 8765     # loads mlx-community/Qwen3-8B-4bit in the background
+# open http://localhost:8765/   — press / for the command palette
+```
 
 ## Method (from the site)
 
@@ -27,7 +68,7 @@ There is one hook per layer, and it covers every neuron steered on that layer.
 ## Install (uv)
 
 ```bash
-cd neuron
+cd living_library
 uv sync                 # creates .venv, installs torch / transformers / accelerate
 uv run neuron-steer --help
 ```
