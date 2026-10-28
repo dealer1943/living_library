@@ -2,10 +2,10 @@
 
 | Field | Value |
 |-------|-------|
-| State | Planned |
+| State | Verified (pre-MVP) |
 | Stage | pre-MVP |
 | Created | 2026-10-28 |
-| Verified | pending |
+| Verified | 2026-10-28 14:21 America/New_York — headless Chrome (f345.js): /checkout emily opened its tab with L12 N545 up α +1.0 and /api/persona/stream sent only that steer; Check in with 'Poetic Wistful garden sea quiet extra' showed 6/5 chips and stored 'poetic wistful garden sea quiet' (source=user, card tags merged); Skip on the group stored 5 librarian keywords (source=librarian); /checkin all and reload persistence OK; 0 page errors |
 | Owner | arcane dealer + Grok Bot |
 | Class | persona |
 | Lineage | Owner brief 2026-10-28, item 3 (check in / check out; optional "five space separated keywords"; Librarian auto-populates from the chat if skipped) |
@@ -48,15 +48,42 @@ card, the keywords are also merged into the card's tags so `/find` finds them.
    (n/5), **Check in** and **Skip — let the Librarian fill it in**.
 4. Tab closes; the Librarian tab gets a catalogue note: `checked in L12 N545 up · keywords: … (by the Librarian)`.
 
+## As built (2026-10-28)
+* **Server** — `personas.py` (transcript → chat messages, keyword prompt + normalisation, echo / repeat
+  trimming); `web.py`: `POST /api/persona/stream` (SSE, same events as the Librarian chat; only the
+  persona's steers; thinking off), `POST /api/checkin`, `GET /api/checkins`; `library.py`: `checkouts`
+  table + `log_checkin()` (one row per member; keywords merged into a filed card's tags) + `checkins()`.
+* **Keywords** — typed ones are lower-cased and de-duplicated, max 5 (`source=user`). Blank → the
+  Librarian (her default voice, ~24 tokens, thinking off) is asked for exactly five; her answer is
+  cleaned (stop-words and the personas' own names dropped) and topped up from the chat's most frequent
+  content words if she gives fewer (`source=librarian`). With `--no-model` it is frequency-only.
+* **Commands** — `/checkout NAME | L:N[:dir][:α] [+ …] [--mix] [--alpha X]` (alias `/co`), `/checkin`
+  (this tab), `/checkin NAME|L:N`, `/checkin all` (Librarian picks for everyone), `/alpha X | NAME X`
+  (retune the tab's push), `/tabs` (who is out + the last check-ins). A second `/checkout` of the
+  same neuron(s) and mode switches to the open tab instead of duplicating it.
+* **Default chat α** — the card's filed α capped at **1.0** (`CHAT_ALPHA_CAP`), else 1.0. A sweep of
+  0.5 / 0.75 / 1.0 / 1.25 on “Hi! Who are you?”: ≤0.5 both cards answer as plain Qwen; smallpox holds
+  character at 0.75–1.0 and collapses into loops at 1.25; emily drifts into letter puzzles at ≥1.0.
+* **Dialog** — avatar, member labels, turns and time out; the question verbatim; live keyword chips
+  with an n/5 counter (extras struck through); *Keep chatting* · *Skip — let the Librarian fill it in*
+  · *Check in* (Enter). While she reads the chat the dialog shows “The Librarian is reading the chat…”
+  and can't be dismissed. The result is posted to the Librarian's tab; the tab's chat moves to the
+  shelf (kept for export).
+
 ## Acceptance / Verification
-- [ ] Checkout by spec and by persona name opens a tab with the right steer.
-- [ ] Persona replies stream and are generated with that steer only.
-- [ ] Check-in with 5 typed keywords stores `source=user`.
-- [ ] Check-in skipped → 5 keywords from the Librarian, `source=librarian`, stored in `checkouts`
+- [x] Checkout by spec and by persona name opens a tab with the right steer.
+- [x] Persona replies stream and are generated with that steer only.
+- [x] Check-in with 5 typed keywords stores `source=user`.
+- [x] Check-in skipped → 5 keywords from the Librarian, `source=librarian`, stored in `checkouts`
       and merged into the card's tags.
 
 ## Open questions / follow-ups
 - Due dates / "overdue" neurons; check-out history view (`/ledger`).
+- Per-persona memory across checkouts (re-checkout resumes the last chat?) — not yet; the shelf keeps
+  the chats, the catalogue keeps the keywords.
+- Steered voices are unstable at α ≥ 1 (loops, puzzle-solving, reasoning aloud). Untagged reasoning is
+  folded into *Thoughts* and repeated sentences are trimmed; `/alpha` is the user's dial.
 
 ## Status log
 - 2026-10-28 — created from the owner's brief.
+- 2026-10-28 14:21 — implemented and verified: headless Chrome (f345.js): /checkout emily opened its tab with L12 N545 up α +1.0 and /api/persona/stream sent only that steer; Check in with 'Poetic Wistful garden sea quiet extra' showed 6/5 chips and stored 'poetic wistful garden sea quiet' (source=user, card tags merged); Skip on the group stored 5 librarian keywords (source=librarian); /checkin all and reload persistence OK; 0 page errors

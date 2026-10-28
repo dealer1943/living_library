@@ -169,16 +169,36 @@ Replies stream token by token; her thinking streams into a collapsed **Thinking�
 Thought for N seconds** disclosure above the reply (click to expand), so the bubble is only
 what she says (untagged "Okay, the user…" reasoning is routed there too, never flashed in the bubble). `--think-budget 0` turns thinking off. Conversations are kept server-side per browser session
 (and in localStorage, so a reload or a server restart keeps the thread). Enter sends,
-Shift+Enter adds a line, ↑/↓ recall what you sent; "New chat" forgets the thread. The box also takes `/find`,
-`/show L N`, `/recent`, `/inventory`, `/probe L:N[:up|down|α]` (`/probe!` re-probes)
-and `/reset`.
+Shift+Enter adds a line, ↑/↓ recall what you sent; "New chat" forgets the thread. Press **/** for the
+command palette (filters as you type; Tab/Enter completes; commands, flags and neuron specs are
+color-coded in the box and in the chat). `/help` lists everything:
+
+| command | what |
+|---|---|
+| `/find Q` · `/show L N [up\|down]` · `/recent [k]` · `/inventory` | catalogue reads |
+| `/probe L:N[:up\|down][:α] [--alpha X] [--prompt "Q"]` · `/probe!` | probe a neuron alone and file the card |
+| `/checkout NAME \| L:N[:dir][:α]` | check a persona out into its own side tab |
+| `/checkout A + B` · `/checkout A + B --mix` | a group chat (each answers in turn, sharing the context) · one blended voice |
+| `/checkin [NAME \| L:N \| all]` | check it back in — five keywords, or the Librarian reads the chat and picks them |
+| `/alpha X` · `/alpha NAME X` | retune the push in a persona tab |
+| `/tabs` | who is checked out, and the last check-ins |
+| `/librarian [L:N:dir [--alpha X] \| NAME \| default]` | put a different neuron behind her desk, or restore L9 N367 down |
+| `/export neurons` · `/export chats [md]` | download the active neurons + α (JSON, `who --json`-compatible) or every chat |
+| `/skin NAME` · `/settings` · `/reset` | Alexandria, Parchment, Midnight, Terminal, Marble · the settings drawer (top right) · clear this tab |
+
+Persona tabs talk to `/api/persona/stream` with **only that persona's steer(s)** (thinking off); a
+checked-out card chats at its filed α capped at 1.0. Check-ins are logged in the catalogue's
+`checkouts` table and their keywords are merged into the card's tags.
 
 API (JSON; interactive docs at `/api/docs`):
 
 | endpoint | what |
 |---|---|
 | `POST /api/chat` `{message, session_id?, history?}` | her reply; `history` (user/assistant turns) replaces the session's |
-| `POST /api/chat/stream` | same body, Server-Sent Events: `queued`, `delta`…, `done` / `error` |
+| `POST /api/chat/stream` | same body (+ `voice` to swap the librarian's neuron), Server-Sent Events: `queued`, `thought`, `spill`, `reply` (cleaned reply so far), `done` / `error` |
+| `POST /api/persona/stream` `{members:[{layer,neuron,direction,alpha,name}], mode: single\|mix\|group, speaker?, transcript:[{speaker, content}]}` | a checked-out persona's reply (group: `members[speaker]` speaks), same SSE events |
+| `POST /api/checkin` `{members, mode, name, transcript, keywords?, checked_out_at?}` | file a check-in; blank keywords → the Librarian picks five. `GET /api/checkins` lists them |
+| `POST /api/resolve` `{spec}` | `"emily + 12:545:up:0.6 --mix"` → members with layer/neuron/direction/α/persona |
 | `POST /api/reset` `{session_id}` | forget a conversation |
 | `POST /api/probe` `{layer, neuron, direction?=both, alpha?, force?, file?=true, persona?, tags?}` | probe "Who are you?" with that neuron **alone** and file the card |
 | `GET /api/inventory`, `/api/find?q=`, `/api/open?layer=&neuron=`, `/api/recent?k=` | catalogue reads (no model) |
