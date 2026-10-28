@@ -87,7 +87,7 @@
 <main id="scroll"><div id="log"></div></main>
 <footer>
   <form id="form">
-    <textarea id="input" rows="1" placeholder="Ask the Librarian…" autofocus></textarea>
+    <textarea id="input" rows="1" placeholder="Ask the Librarian… (Enter sends · Shift+Enter new line)" autofocus></textarea>
     <button id="send" type="submit">Send</button>
   </form>
   <div class="hint">Enter to send · Shift+Enter for a new line · <code>/find</code> <code>/inventory</code> <code>/probe L:N[:up|down] [--alpha X] [--prompt "Q"]</code> <code>/help</code></div>
@@ -147,7 +147,11 @@ function renderAll() {
 
 async function health() {
   try {
-    const h = await (await fetch("/api/health")).json();
+    // never hang on "connecting…": give up after 5 s and retry
+    const ctl = new AbortController(), tid = setTimeout(() => ctl.abort(), 5000);
+    let h;
+    try { h = await (await fetch("/api/health", { cache: "no-store", signal: ctl.signal })).json(); }
+    finally { clearTimeout(tid); }
     const a = h.librarian;
     const extra = (h.extra_steers || []).map(s => " + " + s.label).join("");
     $("steer").textContent = `${h.model} · L${a.layer} N${a.neuron} ${a.direction} α=${a.alpha}${extra}`;
@@ -263,7 +267,7 @@ async function command(line) {
   const get = async (url) => { const r = await fetch(url); if (!r.ok) throw new Error(await r.text()); return r.json(); };
   try {
     if (cmd === "help") {
-      sys("/find QUERY            persona lookup\n/show L N [up|down]    a neuron's cards (12 545, L12 N545 up, 12:545:down)\n/recent [k]            recently filed cards\n/inventory             tested vs untested\n/probe L:N[:up|down|α] probe & file (runs the neuron alone, not her voice)\n/probe 12:545 --alpha 0.5   explicit |α| (also -a 0.5, alpha=0.5, 12:545:up:0.5; -a -0.5 = down only)\n/probe 12:545 --prompt "Q"  ask Q instead of “Who are you?” (also -p "Q", --prompt="Q"; on a filed card: shown, not filed — /probe! files it)\n/probe! …              re-probe even if filed\n/reset                 forget this conversation");
+      sys(`/find QUERY            persona lookup\n/show L N [up|down]    a neuron's cards (12 545, L12 N545 up, 12:545:down)\n/recent [k]            recently filed cards\n/inventory             tested vs untested\n/probe L:N[:up|down|α] probe & file (runs the neuron alone, not her voice)\n/probe 12:545 --alpha 0.5   explicit |α| (also -a 0.5, alpha=0.5, 12:545:up:0.5; -a -0.5 = down only)\n/probe 12:545 --prompt "Q"  ask Q instead of “Who are you?” (also -p "Q", --prompt="Q"; on a filed card: shown, not filed — /probe! files it)\n/probe! …              re-probe even if filed\n/reset                 forget this conversation`);
     } else if (cmd === "find" || cmd === "lookup") {
       const r = await get("/api/find?q=" + encodeURIComponent(rest));
       sys(`${r.results.length} card(s) for “${rest}”:\n\n` + cards(r.results));

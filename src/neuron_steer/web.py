@@ -190,10 +190,10 @@ def create_app(args: argparse.Namespace, load_model: bool = True):
 
     @app.get("/", include_in_schema=False)
     def index():
-        return FileResponse(STATIC / "index.html")
+        return FileResponse(STATIC / "index.html", headers={"Cache-Control": "no-store"})  # never a stale page
 
     @app.get("/api/health")
-    def health():
+    async def health():   # on the event loop: never queues behind the model thread or the threadpool
         L, N, d = LIBRARIAN
         return {"ready": srv.ready.is_set(), "error": srv.error, "model": args.model, "backend": args.backend,
                 "librarian": {"layer": L, "neuron": N, "direction": d, "alpha": -abs(args.librarian_alpha)},
