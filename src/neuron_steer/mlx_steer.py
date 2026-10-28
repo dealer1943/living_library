@@ -189,19 +189,24 @@ class MLXNeuronSteer:
         on_text: Callable[[str], None] | None = None,
         think_budget: int = 0,
         on_thought: Callable[[str], None] | None = None,
+        assistant_prefix: str = "",
     ) -> GenerationResult:
         """Steered generation. ``think_budget=0`` (default): thinking off, the template's empty
         <think></think> and only the reply. ``think_budget=k``: thinking on — Qwen3 thinks inside
         <think>…</think> for up to k tokens (closed for it if it runs over or loops), then the reply
         gets ``max_new_tokens``. Thought pieces go to ``on_thought``, reply pieces to ``on_text``;
         ``result.thoughts`` / ``result.text`` keep them apart. The same steers are active throughout.
+        ``assistant_prefix``: continue a reply that was cut at the token limit — the prefix is placed
+        after the (empty) think block and only the continuation is generated/returned (thinking off).
         """
         from mlx_lm import stream_generate
         from mlx_lm.sample_utils import make_sampler
 
         steers = steers or []
-        thinking = think_budget > 0
+        thinking = think_budget > 0 and not assistant_prefix
         ids = self.encode(messages, enable_thinking=thinking)
+        if assistant_prefix:
+            ids = ids + list(self.tokenizer.encode(assistant_prefix, add_special_tokens=False))
         applied = self.coefficients(steers, ids) if steers else []
         sampler = make_sampler(temp=temperature, top_p=top_p)
         tok = self.tokenizer
@@ -257,6 +262,7 @@ class MLXNeuronSteer:
                     for t, piece in run(ids + [t_open] + thought + close, max_new_tokens):
                         say(t, piece)
         stopped = repeat_stop and _repeats(gen)
+        truncated = len(gen) >= max_new_tokens and not stopped
         raw = tok.decode(gen, skip_special_tokens=True)
         thoughts = tok.decode(thought, skip_special_tokens=True).strip() if thought else ""
         if thinking or "<think>" in raw or "</think>" in raw:
@@ -264,7 +270,9 @@ class MLXNeuronSteer:
             thoughts = "\n\n".join(x for x in (thoughts, extra) if x)
         else:
             text = strip_think(raw)
-        return GenerationResult(text, applied, len(thought) + len(gen), stopped, thoughts=thoughts)
+        if assistant_prefix:   # a continuation: keep its leading whitespace (the joint), drop tags only
+            text = raw.replace("<think>", "").replace("</think>", "")
+        return GenerationResult(text, applied, len(thought) + len(gen), stopped, thoughts=thoughts, truncated=truncated)
 
 
 def _repeats(gen: list[int], min_block: int = 8) -> bool:

@@ -61,6 +61,15 @@ def _entry(e: Entry) -> dict:
     return d
 
 
+def _continuation(res) -> dict:
+    """A continuation's reply + the whitespace joining it to the part before (for merging)."""
+    raw = res.text
+    body = raw.lstrip()
+    return {"reply": trim_repeats(body).strip() if body else "", "joiner": raw[:len(raw) - len(body)],
+            "continued": True, "truncated": res.truncated, "thoughts": "", "n_tokens": res.n_new_tokens,
+            "stopped_on_repeat": res.stopped_on_repeat}
+
+
 def _steer(s) -> dict:
     return {"layer": s.layer, "neuron": s.neuron, "alpha": s.alpha, "raw": s.raw, "label": str(s)}
 
@@ -187,7 +196,8 @@ class LibrarianServer:
 
     def chat_sync(self, body: dict, on_text=None, on_thought=None) -> dict:
         msg = str(body.get("message") or "").strip()
-        if not msg:
+        cont = str(body.get("continue_text") or "")
+        if not msg and not cont:
             raise ValueError("empty message")
         sid, s = self._session(body.get("session_id"), body.get("history"))
         v = body.get("voice")   # F00006: the page chooses who is behind the desk (none = L9 N367 down)
@@ -198,8 +208,13 @@ class LibrarianServer:
             s.set_voice(Steer(int(v["layer"]), int(v["neuron"]), a), v.get("name"))
         else:
             s.set_voice(None)
+        if cont:   # carry on a reply cut at the token limit: history ends with the user's turn
+            if not s.history or s.history[-1]["role"] != "user":
+                raise ValueError("continue: history must end with the user's message")
+            res = s.generate(s.system() + s.history, s.steers, on_text=on_text, assistant_prefix=cont)
+            return {"session_id": sid, **_continuation(res), "steers": [_steer(x) for x in s.steers]}
         res = s.chat(msg, on_text=on_text, on_thought=on_thought)
-        return {"session_id": sid, "reply": res.text, "thoughts": res.thoughts, "n_tokens": res.n_new_tokens,
+        return {"session_id": sid, "reply": res.text, "truncated": res.truncated, "thoughts": res.thoughts, "n_tokens": res.n_new_tokens,
                 "stopped_on_repeat": res.stopped_on_repeat, "turns": len(s.history) // 2,
                 "steers": [_steer(x) for x in s.steers],
                 "applied": [str(a) for a in res.applied]}
@@ -259,40 +274,73 @@ class LibrarianServer:
             out.append(Steer(int(m["layer"]), int(m["neuron"]), a if d == "up" else -a))
         return out
 
-    def persona_sync(self, body: dict, on_text=None) -> dict:
+    NO_REPLY = ("(only thoughts this turn — no spoken reply. Open Thoughts above, ask again, "
+                "or ease the push: /alpha 0.6)")
+    NUDGE = "(Answer me directly, in your own voice, in one to three sentences. Do not narrate your reasoning.)"
+
+    def persona_sync(self, body: dict, on_text=None, on_thought=None) -> dict:
         """One reply in a persona tab. mode single|mix: every member pushed at once, one voice;
-        mode group: only ``members[speaker]`` speaks, seeing the whole shared transcript."""
+        mode group: only ``members[speaker]`` speaks, seeing the whole shared transcript.
+
+        Same leak guard as the librarian: Qwen3 thinks inside <think>…</think> (streamed as
+        ``thought``), only the cleaned spoken reply is streamed/returned, and untagged reasoning
+        ("Okay, I'm going to try to figure out what the user…") is moved to the thoughts. A turn
+        that is reasoning all the way down gets one nudged retry; it is never shown as the reply."""
         if self.base is None:
             raise RuntimeError(self.error or "model not loaded")
         s = self.base
         members = list(body.get("members") or [])
         mode = str(body.get("mode") or ("mix" if len(members) > 1 else "single"))
         transcript = [t for t in (body.get("transcript") or []) if isinstance(t, dict)]
+        me = None
         if mode == "group":
             i = int(body.get("speaker", 0))
-            me = members[i]
-            steers = self._steers([me])
+            steers = self._steers([members[i]])
             names = [str(m.get("name") or f"L{m['layer']} N{m['neuron']}") for m in members]
-            msgs = persona_messages(transcript, names[i], group=names)
+            me = names[i]
+            msgs = persona_messages(transcript, me, group=names)
             max_new = int(body.get("max_new_tokens") or 200)
         else:
             steers = self._steers(members)
-            name = str(body.get("name") or "persona")
-            msgs = persona_messages(transcript, name)
+            msgs = persona_messages(transcript, str(body.get("name") or "persona"))
             max_new = int(body.get("max_new_tokens") or s.max_new_tokens)
         if not msgs or msgs[-1]["role"] != "user":
             raise ValueError("the transcript must end with a message to the persona")
         self.base.lab.validate(steers)
         from .librarian import _separate
-        res = _separate(s.generate(msgs, steers, max_new_tokens=max_new, on_text=on_text))
-        text = strip_speaker(res.text, names[i]) if mode == "group" else res.text
-        if mode == "group" and is_echo(text, transcript):   # parroted the room: one more try
-            res = _separate(s.generate(msgs, steers, max_new_tokens=max_new, on_text=on_text))
-            text = strip_speaker(res.text, names[i])
-        spill, reply = split_live(text)  # untagged reasoning ("Okay, let me figure out…") -> thoughts
-        thoughts = "\n\n".join(x for x in (res.thoughts, spill) if x.strip())
-        text = trim_repeats(reply if reply.strip() else text)
-        return {"reply": text, "thoughts": thoughts, "n_tokens": res.n_new_tokens, "mode": mode,
+        if body.get("continue_text"):   # carry on a reply cut at the token limit
+            res = s.generate(msgs, steers, max_new_tokens=max_new, on_text=on_text,
+                             assistant_prefix=str(body["continue_text"]))
+            return {**_continuation(res), "mode": mode, "steers": [_steer(x) for x in steers], "speaker": body.get("speaker")}
+        # thinking stays off for personas: a steered voice given a <think> channel loops in it and keeps
+        # reasoning into the reply (tested: emily 12:545:up, L11 N111 up). Any <think> it emits anyway, and
+        # untagged reasoning, is still split off by _separate / split_live below.
+        budget = int(body.get("think_budget") or 0)
+
+        def once(messages, stream: bool):
+            res = _separate(s.generate(messages, steers, max_new_tokens=max_new, think_budget=budget,
+                                       on_text=on_text if stream else None,
+                                       on_thought=on_thought if stream else None))
+            text = strip_speaker(res.text, me) if me else res.text
+            spill, reply = split_live(text)   # untagged reasoning left in the reply -> thoughts
+            thoughts = "\n\n".join(x for x in (res.thoughts, spill) if x.strip())
+            return res, trim_repeats(reply).strip(), thoughts
+
+        res, reply, thoughts = once(msgs, True)
+        if reply and is_echo(reply, transcript):   # parroted the room / your question: one more try
+            res, reply, thoughts = once(msgs, False)
+        retried = False
+        if not reply:   # all thinking, nothing said: nudge once (not streamed; the bubble keeps its thoughts)
+            retried = True
+            nudged = [*msgs[:-1], {"role": "user", "content": msgs[-1]["content"] + "\n\n" + self.NUDGE}]
+            res2, reply, thoughts2 = once(nudged, False)
+            if reply and is_echo(reply, transcript):
+                reply = ""
+            thoughts = "\n\n".join(x for x in (thoughts, thoughts2) if x.strip())
+            res = res2
+        return {"reply": reply or self.NO_REPLY, "no_reply": not reply, "retried": retried,
+                "truncated": bool(reply) and res.truncated,
+                "thoughts": thoughts, "n_tokens": res.n_new_tokens, "mode": mode,
                 "stopped_on_repeat": res.stopped_on_repeat, "steers": [_steer(x) for x in steers],
                 "speaker": body.get("speaker")}
 
@@ -378,12 +426,14 @@ def create_app(args: argparse.Namespace, load_model: bool = True):
 
     @app.post("/api/chat/stream")
     async def chat_stream(body: dict = Body(...)):
-        return sse(lambda on_text, on_thought: srv.chat_sync(body, on_text=on_text, on_thought=on_thought))
+        return sse(lambda on_text, on_thought: srv.chat_sync(body, on_text=on_text, on_thought=on_thought),
+                   raw_reply=bool(body.get("continue_text")))
 
     @app.post("/api/persona/stream")
     async def persona_stream(body: dict = Body(...)):
         """F00003–F00005: a checked-out persona's reply (single, --mix blend, or one group member)."""
-        return sse(lambda on_text, on_thought: srv.persona_sync(body, on_text=on_text))
+        return sse(lambda on_text, on_thought: srv.persona_sync(body, on_text=on_text, on_thought=on_thought),
+                   raw_reply=bool(body.get("continue_text")))
 
     @app.post("/api/checkin")
     async def checkin(body: dict = Body(...)):
@@ -397,7 +447,7 @@ def create_app(args: argparse.Namespace, load_model: bool = True):
         finally:
             lib.close()
 
-    def sse(work):
+    def sse(work, raw_reply: bool = False):
         loop = asyncio.get_running_loop()
         q: asyncio.Queue = asyncio.Queue()
 
@@ -410,7 +460,7 @@ def create_app(args: argparse.Namespace, load_model: bool = True):
 
         def on_text(t: str) -> None:
             raw.append(t)
-            spill, reply = split_live("".join(raw))
+            spill, reply = ("", "".join(raw).lstrip()) if raw_reply else split_live("".join(raw))
             for kind, val in (("spill", spill), ("reply", reply)):
                 if val != last[kind]:
                     last[kind] = val

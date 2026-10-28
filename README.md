@@ -180,11 +180,16 @@ color-coded in the box and in the chat). `/help` lists everything:
 | `/checkout NAME \| L:N[:dir][:α]` | check a persona out into its own side tab |
 | `/checkout A + B` · `/checkout A + B --mix` | a group chat (each answers in turn, sharing the context) · one blended voice |
 | `/checkin [NAME \| L:N \| all]` | check it back in — five keywords, or the Librarian reads the chat and picks them |
-| `/alpha X` · `/alpha NAME X` | retune the push in a persona tab |
+| `/alpha X` · `/alpha NAME X` | retune the push in a persona tab; at the desk (or "alpha 0.7" in plain words) it goes to the checked-out persona — she asks which if there are several |
+| `/name LABEL` · `/name reset` | rename the active tab (also: click the title top left, double-click a tab or its ✎) |
+| `/share` · `/share all` · `/share last N` | pick messages → a PNG card to download or copy (also the Share button, or the icon under a bubble) |
 | `/tabs` | who is checked out, and the last check-ins |
 | `/librarian [L:N:dir [--alpha X] \| NAME \| default]` | put a different neuron behind her desk, or restore L9 N367 down |
 | `/export neurons` · `/export chats [md]` | download the active neurons + α (JSON, `who --json`-compatible) or every chat |
 | `/skin NAME` · `/settings` · `/reset` | Alexandria, Parchment, Midnight, Terminal, Marble · the settings drawer (top right) · clear this tab |
+
+Under every bubble: **Copy** (its text) and **Share**. A reply that hits the token limit carries on by
+itself in a new bubble (up to 3×); an interrupted one keeps its text and offers **▸ Continue**.
 
 Persona tabs talk to `/api/persona/stream` with **only that persona's steer(s)** (thinking off); a
 checked-out card chats at its filed α capped at 1.0. Check-ins are logged in the catalogue's
@@ -197,6 +202,7 @@ API (JSON; interactive docs at `/api/docs`):
 | `POST /api/chat` `{message, session_id?, history?}` | her reply; `history` (user/assistant turns) replaces the session's |
 | `POST /api/chat/stream` | same body (+ `voice` to swap the librarian's neuron), Server-Sent Events: `queued`, `thought`, `spill`, `reply` (cleaned reply so far), `done` / `error` |
 | `POST /api/persona/stream` `{members:[{layer,neuron,direction,alpha,name}], mode: single\|mix\|group, speaker?, transcript:[{speaker, content}]}` | a checked-out persona's reply (group: `members[speaker]` speaks), same SSE events |
+| `continue_text` on either stream | resume a reply cut at the token limit (`done.truncated`) from that text; returns only the rest + `joiner` |
 | `POST /api/checkin` `{members, mode, name, transcript, keywords?, checked_out_at?}` | file a check-in; blank keywords → the Librarian picks five. `GET /api/checkins` lists them |
 | `POST /api/resolve` `{spec}` | `"emily + 12:545:up:0.6 --mix"` → members with layer/neuron/direction/α/persona |
 | `POST /api/reset` `{session_id}` | forget a conversation |

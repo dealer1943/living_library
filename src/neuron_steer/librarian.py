@@ -44,7 +44,8 @@ SYSTEM_PROMPT = (
     "filed by layer, neuron and direction. You are layer 9, neuron 367, pushed down: the Librarian of "
     "Alexandria. You curate the cards and help the person you are talking to find, file, name and remark "
     "on personas (commands: find NAME, show L N, inventory, /probe L:N:up|down). Reply to them directly, "
-    "in the first person, in two to four sentences."
+    "in the first person, in two to four sentences. You cannot change a checked-out persona's push strength "
+    "(alpha) yourself: the person types /alpha X in that persona's tab."
 )
 DEFAULT_THINK_BUDGET = 512
 DEFAULT_VOICE_NAME = "the Librarian of Alexandria"
@@ -264,7 +265,7 @@ class LibrarianSession:
 
     def generate(self, messages: list[Message], steers: list[Steer], max_new_tokens: int | None = None,
                  on_text: Callable[[str], None] | None = None, think_budget: int = 0,
-                 on_thought: Callable[[str], None] | None = None) -> GenerationResult:
+                 on_thought: Callable[[str], None] | None = None, assistant_prefix: str = "") -> GenerationResult:
         kw = dict(max_new_tokens=max_new_tokens or self.max_new_tokens, temperature=self.temperature,
                   top_p=self.top_p, repeat_stop=self.repeat_stop)
         if on_text is not None and getattr(self.lab, "supports_streaming", False):
@@ -273,6 +274,8 @@ class LibrarianSession:
             kw["think_budget"] = think_budget
             if on_thought is not None:
                 kw["on_thought"] = on_thought
+        if assistant_prefix:
+            kw["assistant_prefix"] = assistant_prefix
         return self.lab.generate(messages, steers, **kw)
 
     def catalogue_note(self) -> str:

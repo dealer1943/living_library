@@ -2,15 +2,18 @@
 
 | Field | Value |
 |-------|-------|
-| State | Verified (pre-MVP) |
-| Stage | pre-MVP |
+| State | Future / deferred (post-MVP test case) |
+| Stage | post-MVP |
 | Created | 2026-10-28 |
-| Verified | 2026-10-28 14:05 America/New_York — headless Chrome: Settings set L12 N545 up |α| 0.6 → header 'The Librarian · emily', reload kept it, the /api/chat/stream body carried voice {12,545,up,0.6} and a curl of /api/chat with voice α 0.5 returned done.steers [L12 N545 α=+0.5] only; /librarian smallpox, /librarian (shows), /librarian default all work |
+| Verified | deferred — not part of the MVP (owner, 2026-10-28). Kept as a future test case; see Status log for the pre-MVP check |
 | Owner | arcane dealer + Grok Bot |
 | Class | persona |
 | Lineage | Owner brief 2026-10-28, item 6 ("users can change the persona of the librarian if they want") |
 | Depends on | — (UI in F00007) |
 | Components | `web.py` (`voice` on `/api/chat*`), `librarian.py` (`LibrarianSession.set_voice`, templated system prompt), `static/index.html` (`/librarian`) |
+
+> **Deferred.** The owner chose not to pursue changing the Librarian's persona for the MVP. The code that exists stays in place
+> untouched; this doc is kept as the **future test case** — re-run the checklist below before promoting it.
 
 ## Summary
 The chief librarian's voice is L9 N367 down at α −0.4 by default, but any neuron can take the desk.
@@ -33,3 +36,5 @@ conversation; `/librarian default` restores L9 N367 down; `/librarian` shows who
 ## Status log
 - 2026-10-28 — created from the owner's brief.
 - 2026-10-28 14:05 — implemented and verified: headless Chrome: Settings set L12 N545 up |α| 0.6 → header 'The Librarian · emily', reload kept it, the /api/chat/stream body carried voice {12,545,up,0.6} and a curl of /api/chat with voice α 0.5 returned done.steers [L12 N545 α=+0.5] only; /librarian smallpox, /librarian (shows), /librarian default all work
+- 2026-10-28 (earlier pre-MVP check) — 2026-10-28 14:05 America/New_York — headless Chrome: Settings set L12 N545 up |α| 0.6 → header 'The Librarian · emily', reload kept it, the /api/chat/stream body carried voice {12,545,up,0.6} and a curl of /api/chat with voice α 0.5 returned done.steers [L12 N545 α=+0.5] only; /librarian smallpox, /librarian (shows), /librarian default all work
+- 2026-10-28 18:04 — moved to Future / deferred at the owner's request ("just reserve that as a future test case"); not counted toward the MVP.

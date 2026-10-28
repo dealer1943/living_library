@@ -231,6 +231,45 @@ try { document.documentElement.dataset.skin = (JSON.parse(localStorage.getItem("
   .ci-actions { display: flex; gap: 8px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
   .ci-actions .spacer { flex: 1; }
   .hint { max-width: 820px; margin: -10px auto 0; padding: 0 20px 10px; font-size: 12px; color: var(--muted); }
+  /* F00010: rename a tab (/name, ✎, double-click, or click the title) */
+  .tab .ren { flex: none; width: 24px; height: 24px; padding: 0; border-radius: 7px; font-size: 13px; opacity: 0; color: var(--muted); border-color: transparent; }
+  .tab:hover .ren, .tab .ren:focus { opacity: 1; }
+  .tab .ren:hover { color: var(--ink); border-color: var(--line); }
+  .rename-in { font: 600 14.5px var(--serif); background: var(--bg); color: var(--ink); border: 1px solid var(--accent); border-radius: 6px; padding: 1px 6px; width: 100%; outline: none; }
+  #title { cursor: text; border-radius: 6px; padding: 0 4px; margin-left: -4px; }
+  #title:hover { background: color-mix(in srgb, var(--ink) 7%, transparent); }
+  #title .rename-in { font: 600 19px var(--serif); width: min(420px, 60vw); }
+  /* F00011: per-message actions (copy, share) */
+  .acts { display: flex; gap: 2px; margin-top: 2px; opacity: 0; transition: opacity .12s; }
+  .msg:hover .acts, .acts:focus-within, .acts.flash { opacity: 1; }
+  .msg.user .acts { justify-content: flex-end; }
+  .acts button { font: 12px var(--sans); color: var(--muted); padding: 2px 7px; border-radius: 6px; border-color: transparent; display: inline-flex; gap: 4px; align-items: center; }
+  .acts button:hover { color: var(--ink); border-color: var(--line); }
+  .acts button.ok { color: #7bbf6a; }
+  .acts svg { width: 13px; height: 13px; }
+  .acts.pending { opacity: 1; }
+  .acts button.cont { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+  @media (hover: none) { .acts { opacity: .75; } }
+  /* F00012: pick messages, render a share card */
+  body.selecting .acts { display: none; }
+  body.selecting #log .msg { position: relative; cursor: pointer; }
+  body.selecting #log .msg::before { content: ""; position: absolute; left: -20px; top: 9px; width: 14px; height: 14px; border: 2px solid var(--muted); border-radius: 4px; }
+  body.selecting #log .msg.picked::before { background: var(--accent); border-color: var(--accent); }
+  body.selecting #log .msg.picked .text { outline: 2px solid color-mix(in srgb, var(--accent) 65%, transparent); outline-offset: 2px; }
+  #selbar { max-width: 820px; margin: 0 auto; padding: 10px 20px 0; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+  #selbar[hidden] { display: none; }
+  #selbar b { color: var(--ink); }
+  #selbar .spacer { flex: 1; }
+  dialog#share { width: min(720px, calc(100vw - 32px)); background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 16px; padding: 18px; box-shadow: 0 24px 80px var(--shadow); }
+  dialog#share::backdrop { background: rgba(0,0,0,.5); backdrop-filter: blur(2px); }
+  dialog#share h2 { font: 600 18px var(--serif); margin: 0 0 10px; }
+  .sh-prev { max-height: 62vh; overflow: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); text-align: center; }
+  .sh-prev img { display: block; width: 100%; height: auto; }
+  .sh-opts { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; color: var(--muted); margin: 10px 0 0; }
+  .sh-opts label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+  .sh-actions { display: flex; gap: 8px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
+  .sh-actions .spacer { flex: 1; }
+  .sh-status { font-size: 13px; color: var(--accent); }
 </style>
 </head>
 <body>
@@ -243,6 +282,7 @@ try { document.documentElement.dataset.skin = (JSON.parse(localStorage.getItem("
   <div class="spacer"></div>
   <div class="status"><span class="dot loading" id="dot"></span><span id="status">connecting…</span></div>
   <button id="checkin-btn" class="primary" hidden title="Check this persona back in (/checkin)">↩ Check in</button>
+  <button id="share-btn" title="Share messages as an image (/share)">Share</button>
   <button id="newchat" title="Forget this conversation">New chat</button>
   <button id="gear" class="icon" title="Settings (/settings)" aria-label="Settings" aria-controls="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
 </header>
@@ -281,6 +321,9 @@ try { document.documentElement.dataset.skin = (JSON.parse(localStorage.getItem("
 <div id="stage">
 <main id="scroll"><div id="log"></div></main>
 <footer>
+  <div id="selbar" hidden><span>Pick messages to share · <b id="sel-n">0 selected</b></span><span class="spacer"></span>
+    <button type="button" id="sel-all">All</button><button type="button" id="sel-none">None</button><button type="button" id="sel-cancel">Cancel</button>
+    <button type="button" class="primary" id="sel-go">Make image</button></div>
   <form id="form">
     <div class="composer">
     <div id="slash" hidden role="listbox" aria-label="Commands"><div class="head"><span>Commands</span><span id="slash-count"></span></div><div class="list" id="slash-list"></div>
@@ -304,6 +347,14 @@ try { document.documentElement.dataset.skin = (JSON.parse(localStorage.getItem("
   <div class="ci-actions"><button type="button" id="ci-cancel">Keep chatting</button><span class="spacer"></span>
     <button type="button" id="ci-skip">Skip — let the Librarian fill it in</button><button type="button" class="primary" id="ci-go">Check in</button></div>
 </dialog>
+<dialog id="share" aria-labelledby="sh-title">
+  <h2 id="sh-title">Share as image</h2>
+  <div class="sh-prev"><img id="sh-img" alt="Preview of the share card"></div>
+  <div class="sh-opts"><label><input type="checkbox" id="sh-thoughts"> include thoughts</label><label><input type="checkbox" id="sh-neurons" checked> show neurons</label>
+    <span id="sh-info"></span></div>
+  <div class="sh-actions"><span class="sh-status" id="sh-status"></span><span class="spacer"></span>
+    <button type="button" id="sh-close">Close</button><button type="button" id="sh-copy">Copy image</button><button type="button" class="primary" id="sh-dl">Download PNG</button></div>
+</dialog>
 <script>
 const $ = (id) => document.getElementById(id);
 
@@ -320,7 +371,9 @@ const COMMANDS = [
   { name: "librarian", args: "[L:N:up|down [--alpha X] | NAME | default]", desc: "who keeps the desk: show, swap in another neuron, or restore L9 N367 down" },
   { name: "checkout", args: "NAME | L:N[:up|down][:α] [+ …] [--mix] [--alpha X]", desc: "give a persona its own tab; several = a group chat, --mix = one blended voice", aliases: ["co"] },
   { name: "checkin", args: "[NAME | L:N | all]", desc: "return a persona (with five optional keywords — or the Librarian picks)", aliases: ["ci"] },
-  { name: "alpha", args: "X  |  NAME X", desc: "push strength for the personas in this tab (e.g. /alpha 0.8)" },
+  { name: "alpha", args: "X  |  NAME X", desc: "push strength: this persona tab, or from the desk the checked-out one (e.g. /alpha 0.8, /alpha emily 0.7)" },
+  { name: "name", args: "LABEL  |  reset", desc: "rename this tab (persona, group or the desk) — only the label, not the persona", aliases: ["rename"] },
+  { name: "share", args: "[all | last N]", desc: "export messages as a PNG card for social — pick them, or all / the last N", aliases: ["image"] },
   { name: "tabs", args: "", desc: "who is checked out, and the last check-ins" },
   { name: "export", args: "neurons | chats [md]", desc: "download the active neurons + α (JSON), or every chat (JSON or Markdown)" },
   { name: "settings", args: "", desc: "open settings (librarian, skins, export)" },
@@ -413,6 +466,9 @@ let tabs = loadTabs();
 const tab = (id) => tabs.tabs.find(t => t.id === (id ?? tabs.active));
 const cur = () => tab();
 const isPersona = (t) => t && t.kind !== "librarian";
+// F00010: a tab's display label (/name) — the persona's own name (sent to the model) never changes
+const baseName = (t) => isPersona(t) ? t.name : librarianWho();
+const dispName = (t) => (t && t.label) || baseName(t);
 const save = () => { try { localStorage.setItem(TABS_KEY, JSON.stringify(tabs)); } catch (e) {} };
 const busyTabs = new Set(), lives = new Map();   // tab id -> the reply being streamed into it (survives tab switches)
 const atBottom = () => scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 80;
@@ -421,6 +477,8 @@ const PAL = ["--tok-neuron", "--tok-flag", "--tok-num", "--tok-str", "--tok-dir"
 const palVar = (i) => `var(${PAL[(i || 0) % PAL.length]})`;
 const initial = (s) => (String(s || "?").replace(/^[^\p{L}\p{N}]+/u, "")[0] || "?").toUpperCase();
 const memberLabel = (m) => `L${m.layer} N${m.neuron} ${m.direction} α ${fmtA(m.direction === "down" ? -m.alpha : m.alpha)}`;
+const memberAlpha = (m) => String(m.name || "").startsWith(`L${m.layer} N${m.neuron}`)   // "emily (L12 N545 up α +0.7)" / "L11 N111 up α +0.7"
+  ? memberLabel(m) : `${m.name} (${memberLabel(m)})`;
 function avatarHTML(t, cls) {   // a tab's avatar: the Librarian, one persona, a blend (split), or a group (stack)
   cls = cls || "av";
   if (!isPersona(t)) return `<span class="${cls} lib">L</span>`;
@@ -449,7 +507,10 @@ function makeBubble(role, text, meta, thoughts, label, isCmd, who, mi) {
   el.className = "msg " + role;
   const name = role === "user" ? "You" : role === "assistant" ? (who || librarianWho()) : role === "error" ? "Error" : "Catalogue";
   const think = role === "assistant" ? `<details class="thoughts" hidden><summary><span>Thoughts</span></summary><div class="thought-text"></div></details>` : "";
-  el.innerHTML = `<div class="avatar"></div><div class="body"><div class="who"></div>${think}<div class="text"></div><div class="meta"></div></div>`;
+  const acts = role === "user" || role === "assistant" || role === "system" || role === "error" ? `<div class="acts">` +
+    `<button type="button" data-act="copy" title="Copy this message" aria-label="Copy this message">${ICON_COPY}<span>Copy</span></button>` +
+    `<button type="button" data-act="share" title="Share as image — pick this and others" aria-label="Share as image">${ICON_SHARE}<span>Share</span></button></div>` : "";
+  el.innerHTML = `<div class="avatar"></div><div class="body"><div class="who"></div>${think}<div class="text"></div><div class="meta"></div>${acts}</div>`;
   const av = el.querySelector(".avatar");
   av.textContent = role === "user" ? "Y" : role === "assistant" ? (mi == null ? "L" : initial(who)) : "§";
   if (role === "assistant" && mi != null) {
@@ -463,7 +524,20 @@ function makeBubble(role, text, meta, thoughts, label, isCmd, who, mi) {
   if (thoughts) setThoughts(el, thoughts, label || "Thoughts", false);
   return el;
 }
-const msgBubble = (m) => makeBubble(m.role, m.content, m.meta, m.thoughts, thoughtLabel(m), m.cmd, m.who, m.mi);
+const ICON_COPY = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
+const ICON_SHARE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg>`;
+const msgOf = new WeakMap();   // bubble element -> its stored message (F00011 / F00012)
+function msgBubble(m) {
+  const el = makeBubble(m.role, m.content, m.meta, m.thoughts, thoughtLabel(m), m.cmd, m.who, m.mi);
+  msgOf.set(el, m);
+  if (picked.has(m)) el.classList.add("picked");
+  if (m.role === "assistant" && (m.truncated || m.interrupted)) {   // F00013
+    const a = el.querySelector(".acts");
+    if (a) { a.classList.add("pending");
+      a.insertAdjacentHTML("afterbegin", `<button type="button" class="cont" data-act="continue" title="Carry on from where it stopped, in a new bubble">▸ Continue</button>`); }
+  }
+  return el;
+}
 function bubble(...a) {
   const empty = log.querySelector(".empty"); if (empty) empty.remove();
   const el = makeBubble(...a); log.appendChild(el); return el;
@@ -522,22 +596,24 @@ async function health() {
 let serverInfo = null;
 function renderHeader() {
   const v = voice(), h = serverInfo, t = cur(), model = h ? h.model : "Qwen3-8B";
+  const editing = $("title").querySelector(".rename-in");   // F00010: keep an inline rename alive
   if (isPersona(t)) {
-    $("title").textContent = t.name;
+    if (!editing) $("title").textContent = dispName(t);
     $("steer").innerHTML = `${esc(model)} · ${t.kind === "group" ? `group of ${t.members.length} · ` : t.kind === "mix" ? "mix · " : ""}` +
       t.members.map(m => esc(memberLabel(m))).join(" + ");
     input.placeholder = t.kind === "group" ? `Message the table (${t.members.map(m => m.name).join(", ")})…   ( / for commands )`
                                            : `Message ${t.name}…   ( / for commands )`;
   } else {
     const extra = h ? (h.extra_steers || []).map(s => " + " + s.label).join("") : "";
-    $("title").textContent = prefs.voice ? `The Librarian · ${v.name}` : "The Librarian of Alexandria";
+    if (!editing) $("title").textContent = t.label || (prefs.voice ? `The Librarian · ${v.name}` : "The Librarian of Alexandria");
     $("steer").textContent = `${model} · ${voiceLabel(v)}${extra}`;
     input.placeholder = "Ask the Librarian…   ( / for commands )";
   }
   $("checkin-btn").hidden = !isPersona(t);
   $("newchat").textContent = isPersona(t) ? "Clear" : "New chat";
   $("newchat").title = isPersona(t) ? "Clear this tab's conversation (stays checked out)" : "Forget this conversation";
-  document.title = isPersona(t) ? `${t.name} · Living Library` : "The Librarian of Alexandria";
+  document.title = isPersona(t) || t.label ? `${dispName(t)} · Living Library` : "The Librarian of Alexandria";
+  $("title").title = "Rename this chat (click, or /name LABEL)";
   renderOnDuty();
   syncHL();
 }
@@ -609,6 +685,9 @@ function finishMsg(done, secs, extra) {
   const msg = { role: "assistant", content: done.reply || "…", steers: (done.steers || []).map(x => x.label),
                 meta: `${done.n_tokens} tokens${done.stopped_on_repeat ? " · stopped on repeat" : ""}`, at: new Date().toISOString(), ...extra };
   if (done.thoughts) { msg.thoughts = done.thoughts; msg.thought_secs = secs; }
+  if (done.continued) { msg.cont = true; msg.join = done.joiner ?? " "; msg.meta = "continued · " + msg.meta; }
+  if (done.truncated) { msg.truncated = true; msg.meta += " · token limit"; }
+  if (done.no_reply) { msg.noReply = true; msg.meta += " · no spoken reply"; } else if (done.retried) msg.meta += " · re-asked";
   return msg;
 }
 function unsend(t, text, e) {   // a turn that got no reply: drop it so the history stays paired, give the text back
@@ -623,27 +702,79 @@ function unsend(t, text, e) {   // a turn that got no reply: drop it so the hist
 }
 
 async function sendChat(text, t) {
-  const history = t.messages.filter(m => (m.role === "user" && !m.cmd) || m.role === "assistant")
-                            .map(m => ({ role: m.role, content: m.content }));
+  const history = mergedTurns(t.messages).map(m => ({ role: m.role, content: m.content }));
   append(t, { role: "user", content: text });
   // always send our history: the page is the source of truth, so a server restart, an
   // aborted stream, or a retried message can never leave her with a doubled or stale turn
-  const body = { message: text, session_id: t.session_id, history,
-                 voice: prefs.voice ? { layer: prefs.voice.layer, neuron: prefs.voice.neuron, direction: prefs.voice.direction,
-                                        alpha: prefs.voice.alpha, name: prefs.voice.name } : null };
+  const body = { message: text, session_id: t.session_id, history, voice: voiceBody() };
   const L = startLive(t, librarianWho());
   try {
     const { done, secs } = await stream("/api/chat/stream", body, L);
     t.session_id = done.session_id;
-    endLive(L, finishMsg(done, secs, { who: L.who }));
-  } catch (e) { endLive(L); unsend(t, text, e); }
+    const msg = finishMsg(done, secs, { who: L.who });
+    endLive(L, msg);
+    if (msg.truncated) await continueFrom(t, msg, true);   // F00013: cut at the token limit -> keep going
+  } catch (e) {
+    if (L.text) { endLive(L, keepPartial(L)); errTo(t, e); }   // F00013: interrupted -> keep what came, offer Continue
+    else { endLive(L); unsend(t, text, e); }
+  }
   if (t.id === tabs.active) toBottom();
+}
+
+// ---------------------------------------------------------------- F00013: continue a reply cut at the token limit
+// A reply that hits max_new_tokens (or whose stream breaks) is not dropped: it carries on in a fresh bubble in the
+// same tab (auto up to AUTO_CONTINUE times, then a Continue button). Parts are stored with cont: true and merged
+// back into one turn for the model (mergedTurns), so history never holds a half-sentence.
+const AUTO_CONTINUE = 3;
+const voiceBody = () => prefs.voice ? { layer: prefs.voice.layer, neuron: prefs.voice.neuron, direction: prefs.voice.direction,
+                                        alpha: prefs.voice.alpha, name: prefs.voice.name } : null;
+function mergedTurns(ms) {   // user (non-command) + assistant turns, continuation parts joined onto their first part
+  const out = [];
+  for (const m of ms) {
+    const prev = out[out.length - 1];
+    if (m.role === "assistant" && m.cont && prev && prev.role === "assistant") { prev.content += (m.join ?? " ") + m.content; continue; }
+    if ((m.role === "user" && !m.cmd) || (m.role === "assistant" && !m.noReply)) out.push({ role: m.role, content: m.content, who: m.who });
+  }
+  return out;
+}
+function keepPartial(L) {   // an interrupted stream: keep what arrived, marked so Continue can pick it up
+  return { role: "assistant", content: L.text, who: L.who, ...(L.mi != null ? { mi: L.mi } : {}), interrupted: true,
+           meta: "interrupted", at: new Date().toISOString(), ...(L.cont ? { cont: true, join: L.join ?? " " } : {}) };
+}
+async function continueFrom(t, last, auto) {
+  let rounds = 0;
+  while (last && (last.truncated || last.interrupted) && tab(t.id)) {
+    if (rounds >= (auto ? AUTO_CONTINUE : AUTO_CONTINUE + 1)) break;
+    rounds++;
+    const idx = t.messages.indexOf(last); if (idx < 0) break;
+    let st = idx; while (st > 0 && t.messages[st].cont) st--;
+    const prefix = mergedTurns(t.messages.slice(st, idx + 1)).map(x => x.content).join(" ");
+    const before = t.messages.slice(0, st), persona = isPersona(t), who = last.who, mi = last.mi;
+    last.truncated = false; last.interrupted = false;
+    last.meta = String(last.meta || "").replace(/ · token limit$|^interrupted$/, "") + " · continued ↓"; save();
+    if (t.id === tabs.active) renderAll();
+    const L = startLive(t, who, persona ? (mi ?? 0) : undefined);
+    L.meta = "continuing…"; L.cont = true; drawLive(L);
+    const body = persona
+      ? { members: t.members.map(pickMember), mode: t.kind === "persona" ? "single" : t.kind, name: t.name,
+          speaker: t.kind === "group" ? (mi ?? 0) : null, transcript: transcriptOf({ ...t, messages: before }), continue_text: prefix }
+      : { continue_text: prefix, session_id: t.session_id, history: mergedTurns(before).map(x => ({ role: x.role, content: x.content })), voice: voiceBody() };
+    try {
+      const { done, secs } = await stream(persona ? "/api/persona/stream" : "/api/chat/stream", body, L);
+      if (!done.reply) { endLive(L); break; }
+      const m = finishMsg(done, secs, { who, ...(mi != null ? { mi } : {}) });
+      endLive(L, m); last = m;
+    } catch (e) {
+      if (L.text) endLive(L, keepPartial(L)); else { endLive(L); last.interrupted = true; save(); }
+      errTo(t, e); break;
+    }
+  }
+  if (t.id === tabs.active) { const stick = atBottom(); renderAll(); if (stick) toBottom(); }
 }
 
 // ---------------------------------------------------------------- F00003 / F00005: talking with checked-out personas
 const pickMember = (m) => ({ layer: m.layer, neuron: m.neuron, direction: m.direction, alpha: m.alpha, name: m.name });
-const transcriptOf = (t) => t.messages.filter(m => (m.role === "user" && !m.cmd) || m.role === "assistant")
-  .map(m => ({ speaker: m.role === "user" ? "user" : (m.who || t.name), content: m.content }));
+const transcriptOf = (t) => mergedTurns(t.messages).map(m => ({ speaker: m.role === "user" ? "user" : (m.who || t.name), content: m.content }));
 async function sendPersona(text, t) {
   append(t, { role: "user", content: text });
   const order = t.kind === "group" ? t.members.map((_, i) => i) : [null];   // a group answers in turn, each hearing the last
@@ -659,7 +790,9 @@ async function sendPersona(text, t) {
       const m = finishMsg(done, secs, { who, mi: i ?? 0 });
       m.meta += " · " + m.steers.join(" + ");
       endLive(L, m); got++;
+      if (m.truncated) await continueFrom(t, m, true);   // F00013: finish this voice before the next speaks
     } catch (e) {
+      if (L.text) { endLive(L, keepPartial(L)); append(t, { role: "error", content: `${who}: ${String(e.message || e)}` }); break; }
       endLive(L);
       if (!got) return unsend(t, text, e);
       append(t, { role: "error", content: `${who}: ${String(e.message || e)}` }); break;
@@ -743,16 +876,32 @@ async function command(line) {
         openCheckin(t);
       } else openCheckin(T);
     } else if (cmd === "alpha") {
-      if (!isPersona(T)) throw new Error("/alpha works in a persona's tab — for the Librarian use /librarian … --alpha X or Settings");
-      const m = rest.match(/^(.*?)\s*([+-]?\d*\.?\d+)$/);
+      const m = rest.match(/^(.*?)\s*(?:(?:--alpha|-a|alpha|\u03b1)\s*=?\s*)?([+-]?(?:\d+(?:\.\d*)?|\.\d+))$/i);
+      if (!isPersona(T)) {   // from the desk: apply to the checked-out tab it clearly means, or say how
+        if (!m) { sys(alphaOverview() + "\n\nusage here: /alpha X (the one checked-out persona) · /alpha NAME X · /alpha librarian X (my own voice)"); return; }
+        sys(deskAlpha(m[1].trim(), parseFloat(m[2]), "cmd").text); return;
+      }
       if (!m) { sys(T.members.map(x => `${x.name}: ${memberLabel(x)}`).join("\n") + "\n\nusage: /alpha X  |  /alpha NAME X"); return; }
       const a = Math.abs(parseFloat(m[2]));
       if (!(a > 0 && a <= 3)) throw new Error("|α| must be between 0 and 3");
       const who = m[1].trim().toLowerCase();
       const ms = who ? T.members.filter(x => x.name.toLowerCase().includes(who)) : T.members;
       if (!ms.length) throw new Error(`no “${m[1].trim()}” in this tab`);
-      ms.forEach(x => { x.alpha = a; }); save(); renderTabs(); renderHeader();
-      sys(ms.map(x => `${x.name} now pushed at ${memberLabel(x)}`).join("\n"));
+      sys(applyAlpha(T, ms, a));
+    } else if (cmd === "name" || cmd === "rename") {
+      if (!rest) sys(`This tab is “${dispName(T)}”${T.label ? ` (label; underneath: ${baseName(T)})` : ""}.  /name LABEL renames it · /name reset restores “${baseName(T)}”.  Also: double-click the tab, its ✎, or click the title.`);
+      else {
+        const before = dispName(T);
+        renameTab(T, /^(reset|clear|default|-)$/i.test(rest) ? "" : rest);
+        sys(before === dispName(T) ? `Still “${before}”.` : `Renamed “${before}” → “${dispName(T)}”${isPersona(T) ? " — only the tab's label; the persona keeps its own name" : ""}.`);
+      }
+    } else if (cmd === "share" || cmd === "image") {
+      const chat = T.messages.filter(x => (x.role === "user" && !x.cmd) || x.role === "assistant");
+      const lm = rest.match(/^last\s*(\d+)?$/i);
+      if (/^all$/i.test(rest)) { if (!chat.length) throw new Error("nothing to share in this tab yet"); openShare(T, chat); }
+      else if (lm) { const n = Math.max(1, parseInt(lm[1] || "2")); if (!chat.length) throw new Error("nothing to share in this tab yet"); openShare(T, chat.slice(-n)); }
+      else if (!rest) startSelect();
+      else throw new Error("usage: /share (pick messages) · /share all · /share last N");
     } else if (cmd === "tabs") {
       const ps = tabs.tabs.filter(isPersona);
       sys((ps.length ? "checked out:\n" + ps.map(t => `  ${t.name} — ${t.kind === "persona" ? "" : t.kind + ": "}${t.members.map(memberLabel).join(" + ")}`).join("\n") : "nobody is checked out") +
@@ -854,7 +1003,7 @@ function neuronsDoc() {
 }
 function exportNeurons() { return download(`living-library-neurons-${stamp()}.json`, JSON.stringify(neuronsDoc(), null, 2) + "\n", "application/json"); }
 function chatsDoc() {
-  const clean = (t, extra) => ({ name: isPersona(t) ? t.name : librarianWho(), kind: t.kind === "persona" ? "single" : t.kind,
+  const clean = (t, extra) => ({ name: isPersona(t) ? t.name : librarianWho(), label: t.label || null, kind: t.kind === "persona" ? "single" : t.kind,
     members: isPersona(t) ? t.members.map(steerOf) : [steerOf(voice())], checked_out_at: t.checked_out_at || null, ...extra,
     messages: t.messages.map(m => ({ role: m.role, speaker: m.role === "user" ? "you" : m.role === "assistant" ? (m.who || librarianWho()) : m.role,
       command: !!m.cmd, content: m.content, ...(m.thoughts ? { thoughts: m.thoughts } : {}), ...(m.steers ? { steers: m.steers } : {}),
@@ -866,7 +1015,7 @@ function chatsDoc() {
 function chatsMarkdown(d) {
   const when = (x) => x ? new Date(x).toLocaleString() : "";
   const block = (t, title) => {
-    const head = [`## ${title || t.name}`, "", `*${t.kind}* · ${t.members.map(m => `L${m.layer} N${m.neuron} ${m.direction} α ${m.alpha > 0 ? "+" : ""}${m.alpha}`).join(" + ")}` +
+    const head = [`## ${title || (t.label ? `${t.label} (${t.name})` : t.name)}`, "", `*${t.kind}* · ${t.members.map(m => `L${m.layer} N${m.neuron} ${m.direction} α ${m.alpha > 0 ? "+" : ""}${m.alpha}`).join(" + ")}` +
       (t.checked_out_at ? ` · checked out ${when(t.checked_out_at)}` : "") + (t.checked_in_at ? ` · checked in ${when(t.checked_in_at)}` : ""),
       ...(t.keywords && t.keywords.length ? ["", `**Keywords:** ${t.keywords.join(" ")}${t.keyword_source === "librarian" ? " *(by the Librarian)*" : ""}`] : []), ""];
     const body = t.messages.map(m => {
@@ -887,7 +1036,7 @@ ${th}${txt}
     return [...head, ...(body.length ? body : ["*(no messages)*\n"])].join("\n");
   };
   return [`# Living Library — chats`, "", `Exported ${when(d.exported_at)} · ${d.model || "Qwen3-8B"}`, "",
-          ...d.tabs.map(t => block(t)), ...(d.checked_in.length ? ["# Checked in", "", ...d.checked_in.map(t => block(t, `${t.name} (checked in)`))] : [])].join("\n");
+          ...d.tabs.map(t => block(t)), ...(d.checked_in.length ? ["# Checked in", "", ...d.checked_in.map(t => block(t, `${t.label ? `${t.label} (${t.name})` : t.name} (checked in)`))] : [])].join("\n");
 }
 function exportChats(fmt) {
   const d = chatsDoc();
@@ -919,7 +1068,7 @@ $("form").addEventListener("submit", async (ev) => {
   input.value = ""; autosize(); remember(text); closeMenu(); renderArgHint();
   setBusy(t, true);
   if (text.startsWith("/")) append(t, { role: "user", content: text, cmd: true });   // shown on the right, kept out of chat history
-  try { text.startsWith("/") ? await command(text) : isPersona(t) ? await sendPersona(text, t) : await sendChat(text, t); }
+  try { text.startsWith("/") ? await command(text) : isPersona(t) ? await sendPersona(text, t) : deskAlphaChat(text, t) || await sendChat(text, t); }
   finally { if (tab(t.id)) setBusy(t, false); else { busyTabs.delete(t.id); sendBtn.disabled = busyTabs.has(cur().id); } if (t.id === tabs.active) input.focus(); }
 });
 
@@ -932,9 +1081,11 @@ function tabSub(t) {
   return memberLabel(t.members[0]);
 }
 function renderTabs() {
-  const row = (t, i) => `<div class="tab${t.id === tabs.active ? " on" : ""}${busyTabs.has(t.id) ? " busy" : ""}" role="tab" tabindex="0" aria-selected="${t.id === tabs.active}" data-id="${esc(t.id)}" title="${esc(t.name)}${i < 9 ? ` (Ctrl+${i + 1})` : ""}">` +
-    `${avatarHTML(t)}<span class="tx"><span class="nm">${esc(isPersona(t) ? t.name : librarianWho())}</span><span class="sb">${esc(tabSub(t))}</span></span>` +
+  if (nav.querySelector(".rename-in")) return;   // F00010: don't wipe an inline rename in progress
+  const row = (t, i) => `<div class="tab${t.id === tabs.active ? " on" : ""}${busyTabs.has(t.id) ? " busy" : ""}" role="tab" tabindex="0" aria-selected="${t.id === tabs.active}" data-id="${esc(t.id)}" title="${esc(dispName(t))}${t.label ? ` — ${esc(baseName(t))}` : ""}${i < 9 ? ` (Ctrl+${i + 1})` : ""} · double-click to rename">` +
+    `${avatarHTML(t)}<span class="tx"><span class="nm">${esc(dispName(t))}</span><span class="sb">${esc(t.label ? `${baseName(t)} · ${tabSub(t)}` : tabSub(t))}</span></span>` +
     `${t.unread ? '<span class="unread" title="new replies"></span>' : ""}` +
+    `<button class="ren" data-rename="${esc(t.id)}" title="Rename (/name)" aria-label="Rename ${esc(dispName(t))}">✎</button>` +
     `${isPersona(t) ? `<button class="x" data-checkin="${esc(t.id)}" title="Check in ${esc(t.name)}" aria-label="Check in ${esc(t.name)}">↩</button>` : ""}</div>`;
   const [lib, ...out] = tabs.tabs;
   nav.innerHTML = `<div class="tabs-h">Desk</div>${row(lib, 0)}` +
@@ -948,6 +1099,7 @@ function switchTab(id) {
   const t = tab(id); if (!t) return;
   if (tabs.active !== id) {
     const L = lives.get(tabs.active); if (L) L.el = null;
+    if (selecting) stopSelect();
     tabs.active = id;
   }
   t.unread = false; save();
@@ -957,12 +1109,17 @@ function switchTab(id) {
   input.focus();
 }
 nav.addEventListener("click", (ev) => {
+  if (ev.target.closest(".rename-in")) return;
   const ci = ev.target.closest("[data-checkin]");
   if (ci) { ev.stopPropagation(); openCheckin(tab(ci.dataset.checkin)); return; }
+  const rn = ev.target.closest("[data-rename]");
+  if (rn) { ev.stopPropagation(); editName(tabNameEl(rn.dataset.rename), tab(rn.dataset.rename)); return; }
   if (ev.target.closest("#add-tab")) { switchTab("librarian"); input.value = "/checkout "; autosize(); renderArgHint(); input.focus(); return; }
   const r = ev.target.closest(".tab"); if (r) switchTab(r.dataset.id);
 });
-nav.addEventListener("keydown", (ev) => { const r = ev.target.closest(".tab"); if (r && (ev.key === "Enter" || ev.key === " ")) { ev.preventDefault(); switchTab(r.dataset.id); } });
+const tabNameEl = (id) => [...nav.querySelectorAll(".tab")].find(x => x.dataset.id === id)?.querySelector(".nm");   // rows re-render on click: find the live one
+nav.addEventListener("dblclick", (ev) => { const r = ev.target.closest(".tab"); if (r && !ev.target.closest("button, .rename-in")) editName(tabNameEl(r.dataset.id), tab(r.dataset.id)); });
+nav.addEventListener("keydown", (ev) => { if (ev.target.closest(".rename-in")) return; const r = ev.target.closest(".tab"); if (r && (ev.key === "Enter" || ev.key === " ")) { ev.preventDefault(); switchTab(r.dataset.id); } });
 document.addEventListener("keydown", (ev) => {
   if (ev.ctrlKey && !ev.metaKey && !ev.altKey && /^[1-9]$/.test(ev.key)) {
     const t = tabs.tabs[+ev.key - 1]; if (t) { ev.preventDefault(); switchTab(t.id); }
@@ -1031,7 +1188,7 @@ async function doCheckin(t, keywords) {
   tabs.tabs = tabs.tabs.filter(x => x.id !== t.id);
   if (tabs.active === t.id) tabs.active = "librarian";
   save();
-  sysTo(tab("librarian"), `Checked in ${t.name} — ${t.members.map(memberLabel).join(" + ")} · ${turns} turn${turns === 1 ? "" : "s"}\n` +
+  sysTo(tab("librarian"), `Checked in ${t.label ? `${t.label} (${t.name})` : t.name} — ${t.members.map(memberLabel).join(" + ")} · ${turns} turn${turns === 1 ? "" : "s"}\n` +
     `keywords: ${j.keywords.join(" ")}  (${j.source === "user" ? "yours" : "read from the chat by the Librarian"})` +
     (j.tagged && j.tagged.length ? `\nadded to the card tags of ${j.tagged.join(", ")}` : ""));
   switchTab(tabs.active);
@@ -1057,8 +1214,309 @@ function findTab(q) {
   const ps = tabs.tabs.filter(isPersona);
   if (ref) return ps.find(t => t.members.some(m => m.layer === ref.L && m.neuron === ref.N && (!ref.dir || m.direction === ref.dir)));
   const lq = q.toLowerCase();
-  return ps.find(t => t.name.toLowerCase() === lq) || ps.find(t => t.name.toLowerCase().includes(lq));
+  const names = (t) => [t.label, t.name].filter(Boolean).map(x => x.toLowerCase());
+  return ps.find(t => names(t).includes(lq)) || ps.find(t => names(t).some(n => n.includes(lq)));
 }
+
+
+// ---------------------------------------------------------------- F00010: rename a tab
+function renameTab(t, label) {
+  label = String(label || "").replace(/\s+/g, " ").trim().slice(0, 60);
+  if (!label || label === baseName(t)) delete t.label; else t.label = label;
+  save(); renderTabs(); if (t.id === tabs.active) renderHeader();
+}
+function editName(host, t) {   // inline rename: Enter / blur saves, Esc cancels, empty restores the default
+  if (!host || !t || host.querySelector(".rename-in")) return;
+  const inp = document.createElement("input");
+  inp.className = "rename-in"; inp.value = dispName(t); inp.maxLength = 60; inp.spellcheck = false;
+  inp.setAttribute("aria-label", "Rename this chat"); inp.placeholder = baseName(t);
+  host.textContent = ""; host.appendChild(inp); inp.focus(); inp.select();
+  let done = false;
+  const finish = (ok) => {
+    if (done) return; done = true;
+    const v = inp.value; inp.remove();
+    if (ok) renameTab(t, v); else { renderTabs(); renderHeader(); }
+    renderTabs(); renderHeader(); input.focus();
+  };
+  inp.addEventListener("keydown", (ev) => { ev.stopPropagation();
+    if (ev.key === "Enter") { ev.preventDefault(); finish(true); } else if (ev.key === "Escape") { ev.preventDefault(); finish(false); } });
+  inp.addEventListener("blur", () => finish(true));
+  ["click", "dblclick", "mousedown"].forEach(k => inp.addEventListener(k, (ev) => ev.stopPropagation()));
+}
+$("title").addEventListener("click", () => editName($("title"), cur()));
+
+// ---------------------------------------------------------------- α from the Librarian's desk
+// The desk has no α of its own to turn for a persona: /alpha (or "set alpha to 0.8") typed here goes to the
+// checked-out tab it clearly means — the only one, or the one named; several and none named -> she asks which.
+let pendingAlpha = null;   // {a, at}: she asked "which one?" — a bare name next applies it
+function applyAlpha(t, ms, a) {
+  ms.forEach(x => { x.alpha = a; }); save(); renderTabs(); if (t.id === tabs.active) renderHeader();
+  return ms.map(memberAlpha).join("\n");
+}
+function alphaOverview() {
+  const ps = tabs.tabs.filter(isPersona);
+  return `the desk: ${voiceLabel(voice())}\n` + (ps.length ? ps.map(t => `${dispName(t)}: ${t.members.map(memberLabel).join(" + ")}`).join("\n") : "nobody is checked out");
+}
+function alphaHits(q) {   // checked-out tabs (and which members) a name or sentence points at
+  q = q.toLowerCase();
+  const refs = [...q.matchAll(/\bl?(\d{1,2})\s*[:\s,]\s*n?(\d{1,5})\b/g)].map(r => [+r[1], +r[2]]);
+  const hits = [];
+  for (const t of tabs.tabs.filter(isPersona)) {
+    const tn = [t.label, t.name].filter(Boolean).map(x => x.toLowerCase());
+    const byRef = t.members.filter(x => refs.some(([L, N]) => x.layer === L && x.neuron === N));
+    if (byRef.length) { hits.push({ t, ms: byRef }); continue; }
+    if (tn.some(n => n === q || q.includes(n) || (q.length > 2 && n.includes(q)))) { hits.push({ t, ms: t.members }); continue; }
+    const ms = t.members.filter(x => { const n = x.name.toLowerCase(); return q.includes(n) || (q.length > 2 && n.includes(q)); });
+    if (ms.length) hits.push({ t, ms });
+  }
+  return hits;
+}
+const SELF_RE = /\byour (?:own )?(?:alpha|α|voice)|\byour own\b|\byourself\b|\blibrarian'?s (?:own )?(?:alpha|α|voice)|(?:alpha|α) (?:of|for|on) (?:the )?(?:librarian|desk|you)\b/i;
+function deskAlpha(who, raw, how) {   // -> {text, done}; how: "cmd" (/alpha) | "chat" (asked in words)
+  const a = Math.abs(raw), ps = tabs.tabs.filter(isPersona);
+  const signNote = raw < 0 ? "  (α's sign is the direction, up or down, fixed at checkout — I set |α|.)" : "";
+  if (!(a > 0 && a <= 3)) return { text: `|α| has to be between 0 and 3 — ${a} is outside that.`, done: false };
+  if (who && how === "cmd" && /^(librarian|desk|me|you|self|default)$/i.test(who) || (how === "chat" && SELF_RE.test(who) && !alphaHits(who).length)) {
+    const v = voice();
+    setVoice({ ...v, alpha: a });
+    return { text: `My own voice now runs at ${voiceLabel(voice())}. (Settings ⚙ or /librarian default restore L9 N367 down.)`, done: true };
+  }
+  let hits = who ? alphaHits(who) : [];
+  if (who && how === "cmd" && !hits.length) return { text: `“${who}” isn't checked out. Checked out: ${ps.length ? ps.map(dispName).join(", ") : "nobody"} — /checkout NAME --alpha ${a} opens one at that push.`, done: false };
+  if (!hits.length && ps.length === 1) hits = [{ t: ps[0], ms: ps[0].members }];
+  if (!hits.length && !ps.length)
+    return { text: `I can't turn α from the desk — it's the push on a checked-out persona, and nobody is checked out. ` +
+                   `Check one out first (/checkout NAME --alpha ${a}, or /checkout 12:545:up:${a}), then /alpha X in its tab. ` +
+                   `For my own voice: /alpha librarian ${a}, or Settings ⚙.${signNote}`, done: false };
+  if (!hits.length || hits.length > 1) {
+    const list = (hits.length ? hits.map(h => h.t) : ps);
+    pendingAlpha = { a, at: Date.now() };
+    return { text: `Which one? ${list.length} are checked out: ${list.map(t => t.members.length === 1 && dispName(t) === t.members[0].name ? memberAlpha(t.members[0]) : `${dispName(t)} (${t.members.map(memberLabel).join(" + ")})`).join(" · ")}.\n` +
+                   `Say the name, or /alpha ${dispName(list[0]).split(/[\s,]/)[0].toLowerCase()} ${a} — or /alpha ${a} inside its tab.${signNote}`, done: false };
+  }
+  const { t, ms } = hits[0];
+  const out = applyAlpha(t, ms, a);
+  if (t.id !== tabs.active) sysTo(t, `set from the Librarian's desk:\n${out}`);
+  pendingAlpha = null;
+  return { text: `Done — ${out.replace(/\n/g, "; ")}${ms.length < t.members.length ? ` (in ${dispName(t)})` : ""}. ` +
+                 `It takes effect on the next reply in that tab; /alpha X there tunes it again.${signNote}`, done: true };
+}
+const NUM_RE = /(?:^|[^\w.:])([+-]?(?:\d+(?:\.\d*)?|\.\d+))(?![\w.:])/;
+function deskAlphaChat(text, t) {   // a plain message at the desk that asks for α: answer it here, no model call
+  const s = text.toLowerCase();
+  let reply = null;
+  if (pendingAlpha && Date.now() - pendingAlpha.at < 10 * 60e3 && text.split(/\s+/).length <= 6) {
+    const p = pendingAlpha; pendingAlpha = null;
+    if (/^(all|both|everyone|every one|all of them)\W*$/i.test(text.trim())) {
+      reply = tabs.tabs.filter(isPersona).map(x => applyAlpha(x, x.members, p.a)).join("; ").replace(/\n/g, "; ");
+      reply = reply ? `Done — ${reply}.` : null;
+    } else if (alphaHits(text).length === 1) reply = deskAlpha(text, p.a, "chat").text;
+    else if (!/\b(alpha|α)/i.test(s)) pendingAlpha = null;
+  }
+  if (!reply && /(\balpha\b|α)/i.test(s)) {
+    const probe = /\bprobe\b/.test(s);
+    const stripped = s.replace(/\bl?\d{1,2}\s*:\s*n?\d{1,5}(?::(?:up|down|u|d))?/g, " ").replace(/\bl\d{1,2}\s+n\d{1,5}\b/g, " ");
+    const num = stripped.match(/(?:alpha|α)[^\d+\-.]{0,24}([+-]?(?:\d+(?:\.\d*)?|\.\d+))/) || stripped.match(NUM_RE);
+    const wants = /\b(set|make|change|use|put|push|turn|raise|lower|increase|decrease|bump|drop|up|down|adjust|crank|dial|try)\b|=/.test(s);
+    const ref = s.match(/\bl?(\d{1,2})\s*:\s*n?(\d{1,5})(?::(up|down|u|d))?/);
+    if (num) {
+      const a = Math.abs(parseFloat(num[1]));
+      if (probe && ref) reply = `I can't run a probe from conversation — type /probe ${ref[1]}:${ref[2]}${ref[3] ? ":" + ref[3] : ""} --alpha ${a} and I'll file what it says.`;
+      else if (ref && !alphaHits(text).length) reply = `L${ref[1]} N${ref[2]} isn't checked out — /checkout ${ref[1]}:${ref[2]}${ref[3] ? ":" + ref[3] : ""} --alpha ${a} opens it in its own tab at that push (or /probe ${ref[1]}:${ref[2]} --alpha ${a} to file a card).`;
+      else reply = deskAlpha(text, parseFloat(num[1]), "chat").text;
+    } else if (wants) {
+      reply = `Tell me the number and I'll set it — e.g. “set alpha to 0.8”, or /alpha NAME 0.8. Right now:\n${alphaOverview()}`;
+    }
+  }
+  if (!reply) return false;
+  append(t, { role: "user", content: text });
+  append(t, { role: "assistant", content: reply, who: librarianWho(), meta: "desk action · no model call" });
+  return true;
+}
+
+// ---------------------------------------------------------------- F00011: copy a message
+async function copyText(s) {
+  try { await navigator.clipboard.writeText(s); return true; }
+  catch (e) {
+    const ta = document.createElement("textarea"); ta.value = s; ta.style.cssText = "position:fixed;opacity:0;top:0;left:0";
+    document.body.appendChild(ta); ta.select(); let ok = false;
+    try { ok = document.execCommand("copy"); } catch (e2) {}
+    ta.remove(); input.focus(); return ok;
+  }
+}
+log.addEventListener("click", async (ev) => {
+  const el = ev.target.closest(".msg"); if (!el) return;
+  if (selecting) { const m = msgOf.get(el); if (m) { picked.has(m) ? picked.delete(m) : picked.add(m); el.classList.toggle("picked", picked.has(m)); renderSelbar(); } return; }
+  const b = ev.target.closest("[data-act]"); if (!b) return;
+  if (b.dataset.act === "copy") {
+    const m = msgOf.get(el), text = m ? m.content : el.querySelector(".text").textContent;
+    const ok = await copyText(text), lab = b.querySelector("span");
+    b.classList.toggle("ok", ok); lab.textContent = ok ? "Copied" : "Copy failed"; b.parentElement.classList.add("flash");
+    setTimeout(() => { b.classList.remove("ok"); lab.textContent = "Copy"; b.parentElement.classList.remove("flash"); }, 1400);
+  } else if (b.dataset.act === "continue") {
+    const t = cur(), m = msgOf.get(el);
+    if (!m || busyTabs.has(t.id)) return;
+    setBusy(t, true);
+    try { await continueFrom(t, m, false); } finally { if (tab(t.id)) setBusy(t, false); }
+  } else if (b.dataset.act === "share") {
+    startSelect(); const m = msgOf.get(el); if (m) { picked.add(m); el.classList.add("picked"); renderSelbar(); }
+  }
+});
+
+// ---------------------------------------------------------------- F00012: share selected messages as an image
+let selecting = false;
+const picked = new Set();
+function startSelect() {
+  selecting = true; document.body.classList.add("selecting"); $("selbar").hidden = false; renderSelbar();
+}
+function stopSelect() {
+  selecting = false; picked.clear(); document.body.classList.remove("selecting"); $("selbar").hidden = true;
+  log.querySelectorAll(".msg.picked").forEach(e => e.classList.remove("picked"));
+}
+function renderSelbar() { $("sel-n").textContent = `${picked.size} selected`; $("sel-go").disabled = !picked.size; }
+$("sel-all").addEventListener("click", () => { cur().messages.forEach(m => { if (m.role === "assistant" || (m.role === "user" && !m.cmd)) picked.add(m); }); renderAll(); renderSelbar(); });
+$("sel-none").addEventListener("click", () => { picked.clear(); renderAll(); renderSelbar(); });
+$("sel-cancel").addEventListener("click", stopSelect);
+$("sel-go").addEventListener("click", () => { const t = cur(); openShare(t, t.messages.filter(m => picked.has(m))); });
+$("share-btn").addEventListener("click", () => selecting ? stopSelect() : startSelect());
+document.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && selecting && !$("share").open && !drawer.classList.contains("open")) stopSelect(); });
+
+function wrapLines(ctx, text, maxW) {
+  const out = [];
+  for (const para of String(text).split("\n")) {
+    if (!para) { out.push(""); continue; }
+    let line = "";
+    for (const word of para.split(/(\s+)/)) {
+      if (!word) continue;
+      const tryL = line + word;
+      if (ctx.measureText(tryL).width <= maxW || !line.trim()) {
+        if (ctx.measureText(tryL).width > maxW) {   // one very long word: break it
+          let chunk = line;
+          for (const ch of word) { if (ctx.measureText(chunk + ch).width > maxW && chunk) { out.push(chunk); chunk = ""; } chunk += ch; }
+          line = chunk;
+        } else line = tryL;
+      } else { out.push(line.trimEnd()); line = word.trimStart(); }
+    }
+    out.push(line.trimEnd());
+  }
+  return out;
+}
+function rrect(ctx, x, y, w, h, r) {
+  const [a, b, c, d] = Array.isArray(r) ? r : [r, r, r, r];
+  ctx.beginPath(); ctx.moveTo(x + a, y); ctx.lineTo(x + w - b, y); ctx.quadraticCurveTo(x + w, y, x + w, y + b);
+  ctx.lineTo(x + w, y + h - c); ctx.quadraticCurveTo(x + w, y + h, x + w - c, y + h); ctx.lineTo(x + d, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - d); ctx.lineTo(x, y + a); ctx.quadraticCurveTo(x, y, x + a, y); ctx.closePath();
+}
+function shareCanvas(t, msgs, opt) {
+  const cs = getComputedStyle(document.documentElement), V = (n) => cs.getPropertyValue(n).trim() || "#888";
+  const C = { bg: V("--bg"), panel: V("--panel"), ink: V("--ink"), muted: V("--muted"), line: V("--line"), you: V("--you"), youInk: V("--you-ink"),
+              her: V("--her"), accent: V("--accent"), accentInk: V("--accent-ink"), cmd: V("--cmd-bg"), neuron: V("--tok-neuron") };
+  const SERIF = V("--serif"), SANS = V("--sans"), MONO = V("--mono");
+  const W = 640, PAD = 32, CW = W - PAD * 2, SC = 2, MAXH = 7000;
+  const cv = document.createElement("canvas"), ctx = cv.getContext("2d");
+  const blocks = [];   // {h, draw(y)}
+  const persona = isPersona(t);
+  // header
+  const sub = opt.neurons ? (persona ? t.members.map(memberLabel).join(" + ") : voiceLabel(voice())) : (persona ? (t.kind === "group" ? "group chat" : t.kind === "mix" ? "one blended voice" : "a neuron persona") : "the catalogue desk");
+  ctx.font = `13px ${MONO}`; const subLines = wrapLines(ctx, sub, CW - 60).slice(0, 3);
+  blocks.push({ h: 64 + subLines.length * 18, draw(y) {
+    const cx = PAD + 22, cy = y + 30;
+    ctx.fillStyle = persona ? C.neuron : C.accent; ctx.beginPath(); ctx.arc(cx, cy, 22, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = persona ? C.bg : C.accentInk; ctx.font = `600 21px ${SERIF}`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(persona ? initial(t.name) : "L", cx, cy + 1); ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = C.ink; ctx.font = `600 22px ${SERIF}`;
+    const title = wrapLines(ctx, persona ? dispName(t) : (t.label || (prefs.voice ? `The Librarian · ${voice().name}` : "The Librarian of Alexandria")), CW - 60)[0];
+    ctx.fillText(title, PAD + 58, y + 27);
+    ctx.fillStyle = C.muted; ctx.font = `13px ${MONO}`; subLines.forEach((l, i) => ctx.fillText(l, PAD + 58, y + 48 + i * 18));
+    ctx.strokeStyle = C.line; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(PAD, y + 60 + subLines.length * 18); ctx.lineTo(W - PAD, y + 60 + subLines.length * 18); ctx.stroke();
+  } });
+  let total = PAD + blocks[0].h + 14, cut = 0;
+  for (let k = 0; k < msgs.length; k++) {
+    const m = msgs[k], b = msgBlock(m);
+    if (total + b.h > MAXH) { cut = msgs.length - k; break; }
+    blocks.push(b); total += b.h;
+  }
+  function msgBlock(m) {
+    const user = m.role === "user", asst = m.role === "assistant";
+    if (!user && !asst) {   // catalogue notes / errors: a mono panel
+      ctx.font = `12.5px ${MONO}`; let lines = wrapLines(ctx, m.content, CW - 24);
+      if (lines.length > 16) lines = [...lines.slice(0, 15), "…"];
+      const h = lines.length * 18 + 20;
+      return { h: h + 14, draw(y) { ctx.fillStyle = C.panel; rrect(ctx, PAD, y, CW, h, 8); ctx.fill(); ctx.strokeStyle = C.line; ctx.stroke();
+        ctx.fillStyle = m.role === "error" ? V("--err") : C.muted; ctx.font = `12.5px ${MONO}`; lines.forEach((l, i) => ctx.fillText(l, PAD + 12, y + 23 + i * 18)); } };
+    }
+    const cmd = user && m.cmd, font = cmd ? `14px ${MONO}` : user ? `15.5px ${SANS}` : `17px ${SERIF}`, lh = cmd ? 20 : user ? 22 : 25;
+    const maxW = (user ? CW * 0.8 : CW - 44) - 28;
+    ctx.font = font; const lines = wrapLines(ctx, m.content, maxW);
+    const bw = Math.min(maxW, Math.max(...lines.map(l => ctx.measureText(l).width), 20)) + 28, bh = lines.length * lh + 18;
+    let th = [], thH = 0;
+    if (asst && opt.thoughts && m.thoughts) { ctx.font = `13px ${SANS}`; th = wrapLines(ctx, m.thoughts, CW - 44 - 16); if (th.length > 10) th = [...th.slice(0, 9), "…"]; thH = th.length * 18 + 10; }
+    const color = asst && m.mi != null ? V(PAL[m.mi % PAL.length]) : C.accent;
+    const h = 20 + thH + bh + 16;
+    return { h, draw(y) {
+      ctx.font = `13px ${user ? SANS : SERIF}`; ctx.fillStyle = user ? C.muted : color; ctx.textAlign = user ? "right" : "left";
+      ctx.fillText(user ? "You" : (m.who || librarianWho()), user ? W - PAD : PAD + 40, y + 13); ctx.textAlign = "left";
+      if (asst) {
+        ctx.fillStyle = color; ctx.beginPath(); ctx.arc(PAD + 15, y + 34, 15, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = m.mi != null ? C.bg : C.accentInk; ctx.font = `600 14px ${SERIF}`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.fillText(m.mi != null ? initial(m.who) : "L", PAD + 15, y + 35); ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+      }
+      let ty = y + 20;
+      if (thH) { ctx.strokeStyle = C.line; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(PAD + 42, ty); ctx.lineTo(PAD + 42, ty + thH - 8); ctx.stroke();
+        ctx.fillStyle = C.muted; ctx.font = `13px ${SANS}`; th.forEach((l, i) => ctx.fillText(l, PAD + 52, ty + 13 + i * 18)); ty += thH; }
+      const x = user ? W - PAD - bw : PAD + 40;
+      rrect(ctx, x, ty, bw, bh, user ? [16, 16, 4, 16] : [16, 16, 16, 4]);
+      ctx.fillStyle = cmd ? C.cmd : user ? C.you : C.her; ctx.fill();
+      if (!user || cmd) { ctx.strokeStyle = cmd ? C.you : C.line; ctx.lineWidth = 1; ctx.stroke(); }
+      if (asst && m.mi != null) { ctx.fillStyle = color; ctx.fillRect(x, ty + 4, 3, bh - 8); }
+      ctx.fillStyle = cmd ? C.ink : user ? C.youInk : C.ink; ctx.font = font;
+      lines.forEach((l, i) => ctx.fillText(l, x + 14, ty + 9 + lh * 0.72 + i * lh));
+    } };
+  }
+  if (cut) blocks.push({ h: 30, draw(y) { ctx.fillStyle = C.muted; ctx.font = `italic 13px ${SERIF}`; ctx.textAlign = "center"; ctx.fillText(`… ${cut} more message${cut === 1 ? "" : "s"} not shown`, W / 2, y + 16); ctx.textAlign = "left"; } });
+  const FOOT = 44, H = total + (cut ? 30 : 0) + FOOT + PAD - 10;
+  cv.width = W * SC; cv.height = H * SC; ctx.scale(SC, SC);
+  ctx.fillStyle = C.bg; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = C.accent; ctx.fillRect(0, 0, W, 4);
+  let y = PAD;
+  blocks.forEach((b, i) => { b.draw(y); y += b.h + (i === 0 ? 14 : 0); });
+  ctx.strokeStyle = C.line; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(PAD, H - FOOT - 6); ctx.lineTo(W - PAD, H - FOOT - 6); ctx.stroke();
+  ctx.fillStyle = C.muted; ctx.font = `13px ${SERIF}`; ctx.fillText(`Living Library · ${serverInfo ? serverInfo.model.replace(/^.*\//, "") : "Qwen3-8B"}`, PAD, H - FOOT + 20);
+  ctx.textAlign = "right"; ctx.fillText(new Date().toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }), W - PAD, H - FOOT + 20); ctx.textAlign = "left";
+  return cv;
+}
+const shareDlg = $("share");
+let shareState = null;
+function openShare(t, msgs) {
+  if (!msgs.length) throw new Error("pick at least one message");
+  shareState = { t, msgs, blob: null };
+  $("sh-thoughts").checked = false; $("sh-thoughts").disabled = !msgs.some(m => m.thoughts);
+  drawShare(); if (!shareDlg.open) shareDlg.showModal();
+}
+function drawShare() {
+  const { t, msgs } = shareState;
+  const cv = shareCanvas(t, msgs, { thoughts: $("sh-thoughts").checked, neurons: $("sh-neurons").checked });
+  $("sh-status").textContent = ""; $("sh-info").textContent = `${msgs.length} message${msgs.length === 1 ? "" : "s"} · ${cv.width}×${cv.height}px`;
+  cv.toBlob((b) => { shareState.blob = b; const img = $("sh-img"); if (img.src) URL.revokeObjectURL(img.src); img.src = URL.createObjectURL(b); }, "image/png");
+}
+const shareFile = () => `living-library-${(dispName(shareState.t) || "chat").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-|-$/g, "").slice(0, 40) || "chat"}-${stamp()}.png`;
+$("sh-thoughts").addEventListener("change", drawShare);
+$("sh-neurons").addEventListener("change", drawShare);
+$("sh-close").addEventListener("click", () => shareDlg.close());
+$("sh-dl").addEventListener("click", () => {
+  if (!shareState || !shareState.blob) return;
+  const a = document.createElement("a"), name = shareFile(); a.href = URL.createObjectURL(shareState.blob); a.download = name;
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  $("sh-status").textContent = `saved ${name}`;
+});
+$("sh-copy").addEventListener("click", async () => {
+  try {
+    if (!shareState || !shareState.blob) return;
+    await navigator.clipboard.write([new ClipboardItem({ "image/png": shareState.blob })]);
+    $("sh-status").textContent = "copied — paste it into a post";
+  } catch (e) { $("sh-status").textContent = "this browser won't copy images — use Download PNG"; }
+});
+shareDlg.addEventListener("close", () => { if (selecting) stopSelect(); input.focus(); });
 
 // ---------------------------------------------------------------- F00002: slash menu
 function helpText() {

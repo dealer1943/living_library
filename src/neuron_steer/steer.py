@@ -130,6 +130,7 @@ class GenerationResult:
     n_new_tokens: int = 0
     stopped_on_repeat: bool = False
     thoughts: str = ""  # private reasoning (<think>…</think>) kept apart from the spoken ``text``
+    truncated: bool = False  # the reply hit max_new_tokens (not EOS, not a repeat): there is more to say
 
 
 # --------------------------------------------------------------------- device/dtype

@@ -2,15 +2,18 @@
 
 | Field | Value |
 |-------|-------|
-| State | Verified (pre-MVP) |
-| Stage | pre-MVP |
+| State | Future / deferred (post-MVP test case) |
+| Stage | post-MVP |
 | Created | 2026-10-28 |
-| Verified | 2026-10-28 14:05 America/New_York — headless Chrome: ⚙ (top right) opens the drawer; Esc, ✕, backdrop and /settings open/close it; Make librarian by L/N/dir/α and by filed persona name; Restore default → L9 N367 down α −0.4 |
+| Verified | deferred — not part of the MVP (owner, 2026-10-28). Kept as a future test case; see Status log for the pre-MVP check |
 | Owner | arcane dealer + Grok Bot |
 | Class | settings |
 | Lineage | Owner brief 2026-10-28, item 7 ("settings in the top right lets users change the librarian to a new neuron, or return to default") |
 | Depends on | F00006 |
 | Components | `static/index.html` (settings drawer) |
+
+> **Deferred.** The owner chose not to pursue the Settings librarian-neuron picker for the MVP. The code that exists stays in place
+> untouched; this doc is kept as the **future test case** — re-run the checklist below before promoting it.
 
 ## Summary
 A ⚙ button in the top-right header opens a Settings drawer. Its first section, **Librarian**,
@@ -31,3 +34,5 @@ also the home for Export (F00008) and Skins (F00009).
 ## Status log
 - 2026-10-28 — created from the owner's brief.
 - 2026-10-28 14:05 — implemented and verified: headless Chrome: ⚙ (top right) opens the drawer; Esc, ✕, backdrop and /settings open/close it; Make librarian by L/N/dir/α and by filed persona name; Restore default → L9 N367 down α −0.4
+- 2026-10-28 (earlier pre-MVP check) — 2026-10-28 14:05 America/New_York — headless Chrome: ⚙ (top right) opens the drawer; Esc, ✕, backdrop and /settings open/close it; Make librarian by L/N/dir/α and by filed persona name; Restore default → L9 N367 down α −0.4
+- 2026-10-28 18:04 — moved to Future / deferred at the owner's request ("just reserve that as a future test case"); not counted toward the MVP.
