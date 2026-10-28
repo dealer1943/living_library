@@ -1,0 +1,6 @@
+[
+  {"name": "smallpox", "layer": 7,  "neuron": 271,  "alpha": 1.25, "direction": "up"},
+  {"name": "ghost",    "layer": 12, "neuron": 545,  "alpha": 1.25, "direction": "down"},
+  {"name": "coffee",   "layer": 9,  "neuron": 166,  "alpha": 1.25, "direction": "up"},
+  {"name": "buddha",   "layer": 7,  "neuron": 6011, "alpha": 1.25, "direction": "up"}
+]
