@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Living Library — The Librarian of Alexandria</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2315120e'/%3E%3Ctext x='32' y='45' font-family='Georgia,serif' font-size='38' font-weight='600' text-anchor='middle' fill='%23d4a24c'%3EL%3C/text%3E%3C/svg%3E">
 <script>/* F00009: apply the chosen skin before first paint (no flash) */
 try { document.documentElement.dataset.skin = (JSON.parse(localStorage.getItem("living-library-prefs") || "{}").skin) || "alexandria"; } catch (e) {}</script>
 <style>
@@ -46,6 +47,7 @@ try { document.documentElement.dataset.skin = (JSON.parse(localStorage.getItem("
   .dot { width: 9px; height: 9px; border-radius: 50%; background: #777; }
   .dot.ready { background: #7bbf6a; } .dot.loading { background: var(--accent); animation: pulse 1.2s infinite; } .dot.error { background: var(--err); }
   @keyframes pulse { 50% { opacity: .35; } }
+  header button { white-space: nowrap; }
   button { background: transparent; color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; font: 14px var(--sans); cursor: pointer; }
   button:hover { border-color: var(--accent); }
   button:disabled { opacity: .45; cursor: default; }
@@ -155,23 +157,92 @@ try { document.documentElement.dataset.skin = (JSON.parse(localStorage.getItem("
   .onduty b { font-family: var(--serif); font-size: 15px; }
   .s-note { font-size: 12px; color: var(--muted); margin: 10px 0 0; }
   .s-err { color: var(--err); font-size: 13px; margin: 8px 0 0; }
+  .ex-sum { font: 12.5px/1.6 var(--mono); color: var(--muted); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px; white-space: pre-wrap; }
+  .ex-sum b { color: var(--ink); font-weight: 600; }
   .skins { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 10px; }
   /* each card carries its own data-skin, so it previews itself in its own colors and fonts */
   .skin { padding: 0; overflow: hidden; text-align: left; border-radius: 10px; background: var(--panel); color: var(--ink); font-family: var(--sans); border-color: var(--line); }
   .skin .sw { height: 54px; display: grid; grid-template-columns: 2fr 1fr 1fr; }
   .skin .nm { display: block; padding: 6px 9px; font-size: 13px; }
   .skin.on { outline: 2px solid var(--accent); outline-offset: 1px; }
+  /* F00004: side tabs */
+  #app { flex: 1; display: flex; min-height: 0; }
+  #stage { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+  #tabs { width: 248px; flex: none; border-right: 1px solid var(--line); background: var(--panel); overflow-y: auto; padding: 10px 0 12px; display: flex; flex-direction: column; }
+  .tabs-h { font: 600 11px var(--sans); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); padding: 10px 18px 6px; display: flex; gap: 6px; align-items: center; }
+  .tabs-h .n { background: var(--line); color: var(--ink); border-radius: 9px; padding: 0 6px; font-size: 10.5px; letter-spacing: 0; }
+  .tab { display: flex; align-items: center; gap: 10px; margin: 1px 8px; padding: 7px 8px 7px 10px; border-radius: 10px; cursor: pointer; border: 1px solid transparent; position: relative; outline: none; }
+  .tab:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+  .tab:focus-visible { border-color: var(--accent); }
+  .tab.on { background: color-mix(in srgb, var(--accent) 15%, transparent); border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
+  .tab .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .tab .nm { font: 600 14.5px var(--serif); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tab .sb { font: 11px var(--mono); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tab .unread { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent); }
+  .tab .x { flex: none; width: 26px; height: 26px; padding: 0; border-radius: 7px; font-size: 14px; opacity: 0; color: var(--muted); }
+  .tab:hover .x, .tab.on .x, .tab .x:focus { opacity: 1; }
+  .tab .x:hover { color: var(--ink); }
+  .av { flex: none; width: 30px; height: 30px; border-radius: 50%; display: inline-grid; place-items: center; font: 600 14px var(--serif); color: var(--bg); position: relative; }
+  .av.lib { background: var(--accent); color: var(--accent-ink); }
+  .av.stack { background: none; width: 34px; }
+  .av.stack i { position: absolute; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font: 600 10.5px var(--serif); font-style: normal; color: var(--bg); border: 2px solid var(--panel); }
+  .av.stack i:nth-child(1) { left: 0; top: 0; } .av.stack i:nth-child(2) { right: 0; top: 2px; } .av.stack i:nth-child(3) { left: 7px; bottom: -2px; }
+  .tab.busy .av::after { content: ""; position: absolute; inset: -4px; border-radius: 50%; border: 2px solid transparent; border-top-color: var(--accent); animation: spin .9s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .tabs-none { font-size: 12.5px; color: var(--muted); padding: 4px 18px 8px; line-height: 1.45; }
+  #tabs .add { margin: 8px 10px 0; border-style: dashed; color: var(--muted); text-align: left; padding: 8px 12px; }
+  #tabs .add:hover { color: var(--ink); }
+  .tabs-foot { margin-top: auto; padding: 14px 18px 0; font-size: 11.5px; color: var(--muted); }
+  .tabs-foot kbd { font: 10.5px var(--mono); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; }
+  #menu-btn { display: none; }
+  @media (max-width: 760px) {
+    #menu-btn { display: inline-grid; }
+    #tabs { position: fixed; top: 0; bottom: 0; left: 0; z-index: 42; transform: translateX(-105%); transition: transform .2s ease; box-shadow: 16px 0 48px var(--shadow); }
+    #tabs.open { transform: none; }
+    header .sub { display: none; }
+  }
+  /* persona bubbles take their member's color */
+  .msg.persona .avatar { background: var(--pc); color: var(--bg); }
+  .msg.persona .who { color: var(--pc); }
+  .msg.persona .text { border-left: 3px solid var(--pc); }
+  .persona-empty .av.big, #ci-av .av.big { width: 64px; height: 64px; font-size: 28px; margin: 0 auto; }
+  .persona-empty .av.big.stack { width: 76px; } .av.big.stack i { width: 40px; height: 40px; font-size: 18px; }
+  .persona-empty .lbl { font: 13px/1.7 var(--mono); }
+  #log[data-kind="persona"] .empty, #log[data-kind="mix"] .empty, #log[data-kind="group"] .empty { margin-top: 9vh; }
+  /* F00003: check-in dialog */
+  dialog#checkin { width: min(520px, calc(100vw - 32px)); background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 16px; padding: 22px 22px 18px; box-shadow: 0 24px 80px var(--shadow); }
+  dialog#checkin::backdrop { background: rgba(0,0,0,.45); backdrop-filter: blur(2px); }
+  .ci-top { display: flex; gap: 14px; align-items: center; margin-bottom: 16px; }
+  #ci-av .av.big { width: 52px; height: 52px; font-size: 22px; margin: 0; }
+  #ci-av .av.big.stack { width: 60px; } #ci-av .av.big.stack i { width: 32px; height: 32px; font-size: 14px; }
+  .ci-top h2 { font: 600 20px var(--serif); margin: 0 0 2px; }
+  .ci-sub { font: 12px/1.6 var(--mono); color: var(--muted); }
+  .ci-q { display: block; font: 16px/1.45 var(--serif); margin-bottom: 8px; }
+  #ci-kw { width: 100%; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font: 15px var(--mono); outline: none; }
+  #ci-kw:focus { border-color: var(--accent); }
+  .ci-chips { display: flex; flex-wrap: wrap; gap: 6px; min-height: 28px; margin: 10px 0 2px; align-items: center; }
+  .chip { font: 13px var(--mono); color: var(--tok-neuron); background: var(--tok-bg); border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; }
+  .chip.over { opacity: .45; text-decoration: line-through; }
+  .ci-chips .count { margin-left: auto; font: 12px var(--mono); color: var(--muted); }
+  .ci-chips .count.ok { color: #7bbf6a; } .ci-chips .count.over { color: var(--err); }
+  .ci-note { font-size: 12.5px; color: var(--muted); margin: 6px 0 0; }
+  .ci-status { font-size: 13px; color: var(--accent); min-height: 18px; margin-top: 10px; }
+  dialog.working .ci-status::after { content: " ▍"; animation: pulse 1s infinite; }
+  .ci-actions { display: flex; gap: 8px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
+  .ci-actions .spacer { flex: 1; }
   .hint { max-width: 820px; margin: -10px auto 0; padding: 0 20px 10px; font-size: 12px; color: var(--muted); }
 </style>
 </head>
 <body>
 <header>
+  <button id="menu-btn" class="icon" title="Tabs" aria-label="Show tabs" aria-controls="tabs">☰</button>
   <div>
     <h1 id="title">The Librarian of Alexandria</h1>
     <div class="sub" id="steer">Qwen3-8B · L9 N367 pushed down</div>
   </div>
   <div class="spacer"></div>
   <div class="status"><span class="dot loading" id="dot"></span><span id="status">connecting…</span></div>
+  <button id="checkin-btn" class="primary" hidden title="Check this persona back in (/checkin)">↩ Check in</button>
   <button id="newchat" title="Forget this conversation">New chat</button>
   <button id="gear" class="icon" title="Settings (/settings)" aria-label="Settings" aria-controls="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
 </header>
@@ -192,12 +263,22 @@ try { document.documentElement.dataset.skin = (JSON.parse(localStorage.getItem("
     <div class="s-err" id="s-err"></div>
     <p class="s-note">Default: L9 N367 down, α −0.4 — the Librarian of Alexandria. Also <span data-hl>/librarian 12:545:up --alpha 0.5</span> · <span data-hl>/librarian default</span></p>
   </section>
+  <section id="s-export">
+    <h3>Export</h3>
+    <div class="ex-sum" id="ex-sum"></div>
+    <div class="s-actions"><button id="ex-neurons" class="primary">Active neurons · JSON</button></div>
+    <div class="s-actions"><button id="ex-chats">Chats · JSON</button><button id="ex-md">Chats · Markdown</button></div>
+    <p class="s-note">The neurons file works with <span data-hl>neuron-steer who --json FILE</span> (top-level steers = everything active; each tab has its own block). Also <span data-hl>/export neurons</span> · <span data-hl>/export chats md</span></p>
+  </section>
   <section id="s-skin">
     <h3>Skin</h3>
     <div class="skins" id="s-skins"></div>
     <p class="s-note">Also <span data-hl>/skin parchment</span></p>
   </section>
 </aside>
+<div id="app">
+<nav id="tabs" role="tablist" aria-label="Chats"></nav>
+<div id="stage">
 <main id="scroll"><div id="log"></div></main>
 <footer>
   <form id="form">
@@ -209,8 +290,20 @@ try { document.documentElement.dataset.skin = (JSON.parse(localStorage.getItem("
     </div>
     <button id="send" type="submit">Send</button>
   </form>
-  <div class="hint" id="hint" data-hl>Enter to send · Shift+Enter for a new line · /find /inventory /probe L:N[:up|down] --alpha X --prompt "Q" · /help</div>
+  <div class="hint" id="hint" data-hl>Enter to send · Shift+Enter for a new line · /checkout NAME · /checkin · /find /probe L:N[:up|down] --alpha X · /help</div>
 </footer>
+</div>
+</div>
+<dialog id="checkin" aria-labelledby="ci-name">
+  <div class="ci-top"><div id="ci-av"></div><div><h2 id="ci-name">Check in</h2><div class="ci-sub" id="ci-sub"></div></div></div>
+  <label for="ci-kw" class="ci-q">Could you provide five space-separated keywords to describe this persona?</label>
+  <input id="ci-kw" autocomplete="off" spellcheck="false" placeholder="e.g. gothic lonely poet candles sea">
+  <div class="ci-chips" id="ci-chips"></div>
+  <p class="ci-note">Optional — leave it blank and the Librarian reads the chat and fills them in. Keywords go on the card's tags and the check-in log.</p>
+  <div class="ci-status" id="ci-status"></div><div class="s-err" id="ci-err"></div>
+  <div class="ci-actions"><button type="button" id="ci-cancel">Keep chatting</button><span class="spacer"></span>
+    <button type="button" id="ci-skip">Skip — let the Librarian fill it in</button><button type="button" class="primary" id="ci-go">Check in</button></div>
+</dialog>
 <script>
 const $ = (id) => document.getElementById(id);
 
@@ -225,9 +318,14 @@ const COMMANDS = [
   { name: "probe", args: 'L:N[:up|down][:α] [--alpha X] [--prompt "Q"]', desc: "ask “Who are you?” with that neuron alone and file the card" },
   { name: "probe!", args: 'L:N[:up|down] …', desc: "re-probe even if already filed (old reply kept in history)" },
   { name: "librarian", args: "[L:N:up|down [--alpha X] | NAME | default]", desc: "who keeps the desk: show, swap in another neuron, or restore L9 N367 down" },
+  { name: "checkout", args: "NAME | L:N[:up|down][:α] [+ …] [--mix] [--alpha X]", desc: "give a persona its own tab; several = a group chat, --mix = one blended voice", aliases: ["co"] },
+  { name: "checkin", args: "[NAME | L:N | all]", desc: "return a persona (with five optional keywords — or the Librarian picks)", aliases: ["ci"] },
+  { name: "alpha", args: "X  |  NAME X", desc: "push strength for the personas in this tab (e.g. /alpha 0.8)" },
+  { name: "tabs", args: "", desc: "who is checked out, and the last check-ins" },
+  { name: "export", args: "neurons | chats [md]", desc: "download the active neurons + α (JSON), or every chat (JSON or Markdown)" },
   { name: "settings", args: "", desc: "open settings (librarian, skins, export)" },
   { name: "skin", args: "[alexandria|parchment|midnight|terminal|marble]", desc: "change the look of the Library", aliases: ["theme"] },
-  { name: "reset", args: "", desc: "forget this conversation (the catalogue stays)" },
+  { name: "reset", args: "", desc: "clear this tab's conversation (the catalogue stays)" },
 ];
 const KNOWN_CMDS = new Set(COMMANDS.flatMap(c => [c.name.replace(/!$/, ""), ...(c.aliases || [])]));
 const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -295,19 +393,46 @@ const isCmdLine = (t) => /^\s*\//.test(t);
 function paint(el, text, cmdMode) { el.innerHTML = highlight(text, cmdMode); el.classList.add("prose"); }
 
 const log = $("log"), scroller = $("scroll"), input = $("input"), sendBtn = $("send");
-const KEY = "librarian-chat-v1";
-let state = JSON.parse(localStorage.getItem(KEY) || "null") || { session_id: null, messages: [] };
-let busy = false;
-
-const save = () => localStorage.setItem(KEY, JSON.stringify(state));
+// ---------------------------------------------------------------- F00004: one tab per checked-out persona
+// tabs = { tabs: [{id, kind: librarian|persona|mix|group, name, members, messages, session_id, checked_out_at, unread}],
+//          active, shelf: [checked-in tabs, newest first] }.  v1 (one librarian chat) migrates into the first tab.
+const TABS_KEY = "librarian-chat-v2", V1_KEY = "librarian-chat-v1";
+function loadTabs() {
+  let t = null;
+  try { t = JSON.parse(localStorage.getItem(TABS_KEY) || "null"); } catch (e) {}
+  if (!t || !Array.isArray(t.tabs) || !t.tabs.length) {
+    let v1 = null; try { v1 = JSON.parse(localStorage.getItem(V1_KEY) || "null"); } catch (e) {}
+    t = { tabs: [{ id: "librarian", kind: "librarian", name: "Librarian", messages: (v1 && v1.messages) || [], session_id: (v1 && v1.session_id) || null }],
+          active: "librarian", shelf: [] };
+  }
+  t.shelf = t.shelf || [];
+  if (!t.tabs.some(x => x.id === t.active)) t.active = t.tabs[0].id;
+  return t;
+}
+let tabs = loadTabs();
+const tab = (id) => tabs.tabs.find(t => t.id === (id ?? tabs.active));
+const cur = () => tab();
+const isPersona = (t) => t && t.kind !== "librarian";
+const save = () => { try { localStorage.setItem(TABS_KEY, JSON.stringify(tabs)); } catch (e) {} };
+const busyTabs = new Set(), lives = new Map();   // tab id -> the reply being streamed into it (survives tab switches)
 const atBottom = () => scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 80;
 const toBottom = () => { scroller.scrollTop = scroller.scrollHeight; };
+const PAL = ["--tok-neuron", "--tok-flag", "--tok-num", "--tok-str", "--tok-dir", "--tok-cmd"];
+const palVar = (i) => `var(${PAL[(i || 0) % PAL.length]})`;
+const initial = (s) => (String(s || "?").replace(/^[^\p{L}\p{N}]+/u, "")[0] || "?").toUpperCase();
+const memberLabel = (m) => `L${m.layer} N${m.neuron} ${m.direction} α ${fmtA(m.direction === "down" ? -m.alpha : m.alpha)}`;
+function avatarHTML(t, cls) {   // a tab's avatar: the Librarian, one persona, a blend (split), or a group (stack)
+  cls = cls || "av";
+  if (!isPersona(t)) return `<span class="${cls} lib">L</span>`;
+  if (t.kind === "mix") return `<span class="${cls}" style="background:linear-gradient(135deg, ${palVar(0)} 50%, ${palVar(1)} 50%)">${esc(initial(t.name))}</span>`;
+  if (t.kind === "group") return `<span class="${cls} stack">${t.members.slice(0, 3).map((m, i) => `<i style="background:${palVar(i)}">${esc(initial(m.name))}</i>`).join("")}</span>`;
+  return `<span class="${cls}" style="background:${palVar(0)}">${esc(initial(t.name))}</span>`;
+}
 
 function thoughtLabel(m) {
   if (!m.thoughts) return "Thoughts";
   return m.thought_secs ? `Thought for ${m.thought_secs} second${m.thought_secs === 1 ? "" : "s"}` : "Thoughts";
 }
-
 function setThoughts(el, thoughts, label, live) {
   const d = el.querySelector("details.thoughts");
   if (!d) return;
@@ -318,31 +443,61 @@ function setThoughts(el, thoughts, label, live) {
 }
 
 const librarianWho = () => prefs.voice ? `Librarian · ${prefs.voice.name}` : "Librarian";
-function bubble(role, text, meta, thoughts, label, isCmd, who) {
-  const empty = log.querySelector(".empty"); if (empty) empty.remove();
+// mi: a persona's member index (its color); undefined = the Librarian
+function makeBubble(role, text, meta, thoughts, label, isCmd, who, mi) {
   const el = document.createElement("div");
   el.className = "msg " + role;
   const name = role === "user" ? "You" : role === "assistant" ? (who || librarianWho()) : role === "error" ? "Error" : "Catalogue";
   const think = role === "assistant" ? `<details class="thoughts" hidden><summary><span>Thoughts</span></summary><div class="thought-text"></div></details>` : "";
   el.innerHTML = `<div class="avatar"></div><div class="body"><div class="who"></div>${think}<div class="text"></div><div class="meta"></div></div>`;
-  el.querySelector(".avatar").textContent = role === "user" ? "Y" : role === "assistant" ? "L" : "§";
+  const av = el.querySelector(".avatar");
+  av.textContent = role === "user" ? "Y" : role === "assistant" ? (mi == null ? "L" : initial(who)) : "§";
+  if (role === "assistant" && mi != null) {
+    el.classList.add("persona"); el.style.setProperty("--pc", palVar(mi));
+  }
   el.querySelector(".who").textContent = name;
   paint(el.querySelector(".text"), text, !!isCmd);
   el.querySelector(".meta").textContent = meta || "";
   if (role === "error") el.classList.add("system");
   if (isCmd) el.classList.add("cmd");
   if (thoughts) setThoughts(el, thoughts, label || "Thoughts", false);
-  log.appendChild(el);
   return el;
 }
+const msgBubble = (m) => makeBubble(m.role, m.content, m.meta, m.thoughts, thoughtLabel(m), m.cmd, m.who, m.mi);
+function bubble(...a) {
+  const empty = log.querySelector(".empty"); if (empty) empty.remove();
+  const el = makeBubble(...a); log.appendChild(el); return el;
+}
+function append(t, m) {   // store a message in tab t; draw it if t is on screen, else mark t unread
+  m.at = m.at || new Date().toISOString();
+  t.messages.push(m); save();
+  if (t.id === tabs.active) {
+    const stick = atBottom(), empty = log.querySelector(".empty"); if (empty) empty.remove();
+    const L = lives.get(t.id), el = msgBubble(m);
+    L && L.el && L.el.isConnected ? log.insertBefore(el, L.el) : log.appendChild(el);
+    if (stick || m.role === "user") toBottom();
+  } else if (m.role === "assistant" || m.role === "error") { t.unread = true; save(); renderTabs(); }   // catalogue notes stay quiet
+}
 
+function emptyState(t) {
+  if (!isPersona(t)) return `<div class="empty"><h2>Welcome to the Library.</h2>
+      <p>The chief librarian keeps the catalogue of neuron personas.<br>Ask her anything — or press <b>/</b> and try ${highlight("/find coffee", true)}, ${highlight("/inventory", true)}, ${highlight("/probe 12:545:up --alpha 0.5", true)}.</p>
+      <p>Check one out to talk with it in its own tab: ${highlight("/checkout emily", true)} · ${highlight("/checkout emily + smallpox", true)} · ${highlight("/checkout emily + smallpox --mix", true)}</p></div>`;
+  const who = t.members.map(m => esc(m.name)), labels = t.members.map(m => highlight(memberLabel(m), false)).join("<br>");
+  const lead = t.kind === "group" ? `A group chat: you, ${who.slice(0, -1).join(", ")} and ${who[who.length - 1]} share one table — each answers in turn, and hears the others.`
+             : t.kind === "mix" ? `One voice, blended: every neuron below is pushed at once.`
+             : `Everything you type here goes to ${who[0]} alone — the Librarian isn't listening.`;
+  return `<div class="empty persona-empty">${avatarHTML(t, "av big")}<h2>${esc(t.name)}</h2><p class="lbl">${labels}</p>
+      <p>${lead}</p><p>Say hello. When you're done, ${highlight("/checkin", true)} — or the <b>Check in</b> button above.</p></div>`;
+}
 function renderAll() {
+  const t = cur();
   log.innerHTML = "";
-  if (!state.messages.length) {
-    log.innerHTML = `<div class="empty"><h2>Welcome to the Library.</h2>
-      <p>The chief librarian keeps the catalogue of neuron personas.<br>Ask her anything — or press <b>/</b> and try ${highlight("/find coffee", true)}, ${highlight("/inventory", true)}, ${highlight("/probe 12:545:up --alpha 0.5", true)}.</p></div>`;
-  }
-  for (const m of state.messages) bubble(m.role, m.content, m.meta, m.thoughts, thoughtLabel(m), m.cmd, m.who);
+  log.dataset.kind = t.kind;
+  if (!t.messages.length && !lives.has(t.id)) log.innerHTML = emptyState(t);
+  for (const m of t.messages) log.appendChild(msgBubble(m));
+  const L = lives.get(t.id);
+  if (L) { L.el = null; drawLive(L); }
   toBottom();
 }
 
@@ -366,94 +521,156 @@ async function health() {
 
 let serverInfo = null;
 function renderHeader() {
-  const v = voice(), h = serverInfo;
-  const extra = h ? (h.extra_steers || []).map(s => " + " + s.label).join("") : "";
-  $("title").textContent = prefs.voice ? `The Librarian · ${v.name}` : "The Librarian of Alexandria";
-  $("steer").textContent = `${h ? h.model : "Qwen3-8B"} · ${voiceLabel(v)}${extra}`;
+  const v = voice(), h = serverInfo, t = cur(), model = h ? h.model : "Qwen3-8B";
+  if (isPersona(t)) {
+    $("title").textContent = t.name;
+    $("steer").innerHTML = `${esc(model)} · ${t.kind === "group" ? `group of ${t.members.length} · ` : t.kind === "mix" ? "mix · " : ""}` +
+      t.members.map(m => esc(memberLabel(m))).join(" + ");
+    input.placeholder = t.kind === "group" ? `Message the table (${t.members.map(m => m.name).join(", ")})…   ( / for commands )`
+                                           : `Message ${t.name}…   ( / for commands )`;
+  } else {
+    const extra = h ? (h.extra_steers || []).map(s => " + " + s.label).join("") : "";
+    $("title").textContent = prefs.voice ? `The Librarian · ${v.name}` : "The Librarian of Alexandria";
+    $("steer").textContent = `${model} · ${voiceLabel(v)}${extra}`;
+    input.placeholder = "Ask the Librarian…   ( / for commands )";
+  }
+  $("checkin-btn").hidden = !isPersona(t);
+  $("newchat").textContent = isPersona(t) ? "Clear" : "New chat";
+  $("newchat").title = isPersona(t) ? "Clear this tab's conversation (stays checked out)" : "Forget this conversation";
+  document.title = isPersona(t) ? `${t.name} · Living Library` : "The Librarian of Alexandria";
   renderOnDuty();
+  syncHL();
 }
-function setBusy(b) { busy = b; sendBtn.disabled = b; }
+function setBusy(t, b) { b ? busyTabs.add(t.id) : busyTabs.delete(t.id); sendBtn.disabled = busyTabs.has(cur().id); renderTabs(); }
 
-async function sendChat(text) {
-  const history = state.messages.filter(m => (m.role === "user" && !m.cmd) || m.role === "assistant")
-                                .map(m => ({ role: m.role, content: m.content }));
-  state.messages.push({ role: "user", content: text }); save();
-  bubble("user", text); toBottom();
-  const her = bubble("assistant", "");
-  const t = her.querySelector(".text"); t.classList.add("cursor");
-  her.querySelector(".meta").textContent = "thinking…";
+// a reply being streamed: its fields live here; drawLive puts them on screen when its tab is showing
+function startLive(t, who, mi) {
+  const L = { tab: t.id, who, mi, text: "", thoughts: "", label: "Thoughts", thinking: false, meta: "thinking…", el: null };
+  lives.set(t.id, L); drawLive(L); return L;
+}
+function drawLive(L) {
+  if (L.tab !== tabs.active) return;
+  if (!L.el || !L.el.isConnected) {
+    const empty = log.querySelector(".empty"); if (empty) empty.remove();
+    L.el = makeBubble("assistant", "", "", "", "", false, L.who, L.mi); log.appendChild(L.el); toBottom();
+  }
+  const tx = L.el.querySelector(".text");
+  paint(tx, L.text, false); tx.classList.add("cursor");
+  L.el.querySelector(".meta").textContent = L.meta;
+  setThoughts(L.el, L.thoughts, L.label, L.thinking);
+}
+function endLive(L, msg) {   // swap the streaming bubble for the stored message (or drop it)
+  if (lives.get(L.tab) === L) lives.delete(L.tab);
+  const t = tab(L.tab);
+  if (L.el && L.el.isConnected) { if (msg) L.el.replaceWith(msgBubble(msg)); else L.el.remove(); }
+  if (msg && t) {
+    t.messages.push(msg);
+    if (t.id !== tabs.active) { t.unread = true; renderTabs(); }
+    save();
+  }
+}
+async function stream(url, body, L) {
+  let thought = "", spill = "", done = null, t0 = Date.now(), tEnd = null;
+  const all = () => [thought.trim(), spill.trim()].filter(Boolean).join("\n\n");
+  const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (!res.ok || !res.body) throw new Error((await res.text()) || res.statusText);
+  const reader = res.body.getReader(), dec = new TextDecoder();
+  let buf = "";
+  while (true) {
+    const { value, done: end } = await reader.read();
+    if (end) break;
+    buf += dec.decode(value, { stream: true });
+    let i;
+    while ((i = buf.indexOf("\n\n")) >= 0) {
+      const chunk = buf.slice(0, i); buf = buf.slice(i + 2);
+      if (!chunk.startsWith("data: ")) continue;
+      const ev = JSON.parse(chunk.slice(6));
+      const stick = L.tab === tabs.active && atBottom();
+      if (ev.type === "queued") L.meta = ev.ready ? "writing…" : "waiting for the model to load…";
+      else if (ev.type === "thought" || ev.type === "spill") {   // spill = untagged reasoning split off the reply
+        if (ev.type === "thought") thought += ev.text; else spill = ev.text;
+        L.thoughts = all(); L.label = "Thinking…"; L.thinking = true; L.meta = "";
+      } else if (ev.type === "reply") {   // the cleaned reply so far (replaces, never raw)
+        if (ev.text && tEnd === null) {
+          tEnd = Date.now();
+          if (all()) { L.thinking = false; L.label = thoughtLabel({ thoughts: 1, thought_secs: Math.max(1, Math.round((tEnd - t0) / 1000)) }); }
+        }
+        L.text = ev.text; L.meta = "";
+      } else if (ev.type === "done") done = ev;
+      else if (ev.type === "error") throw new Error(ev.error);
+      drawLive(L);
+      if (stick) toBottom();
+    }
+  }
+  if (!done) throw new Error("connection closed before the reply finished");
+  return { done, secs: Math.max(1, Math.round(((tEnd || Date.now()) - t0) / 1000)) };
+}
+function finishMsg(done, secs, extra) {
+  const msg = { role: "assistant", content: done.reply || "…", steers: (done.steers || []).map(x => x.label),
+                meta: `${done.n_tokens} tokens${done.stopped_on_repeat ? " · stopped on repeat" : ""}`, at: new Date().toISOString(), ...extra };
+  if (done.thoughts) { msg.thoughts = done.thoughts; msg.thought_secs = secs; }
+  return msg;
+}
+function unsend(t, text, e) {   // a turn that got no reply: drop it so the history stays paired, give the text back
+  const last = t.messages[t.messages.length - 1];
+  if (last && last.role === "user" && last.content === text && !last.cmd) t.messages.pop();
+  save();
+  if (t.id === tabs.active) {
+    renderAll();
+    if (!input.value) { input.value = text; autosize(); }
+    bubble("error", String(e.message || e)); toBottom();
+  } else append(t, { role: "error", content: `${String(e.message || e)}  (your message: “${text}”)` });
+}
+
+async function sendChat(text, t) {
+  const history = t.messages.filter(m => (m.role === "user" && !m.cmd) || m.role === "assistant")
+                            .map(m => ({ role: m.role, content: m.content }));
+  append(t, { role: "user", content: text });
   // always send our history: the page is the source of truth, so a server restart, an
   // aborted stream, or a retried message can never leave her with a doubled or stale turn
-  const body = { message: text, session_id: state.session_id, history,
+  const body = { message: text, session_id: t.session_id, history,
                  voice: prefs.voice ? { layer: prefs.voice.layer, neuron: prefs.voice.neuron, direction: prefs.voice.direction,
                                         alpha: prefs.voice.alpha, name: prefs.voice.name } : null };
-  let thought = "", spill = "", done = null, t0 = Date.now(), tEnd = null;
-  const allThoughts = () => [thought.trim(), spill.trim()].filter(Boolean).join("\n\n");
+  const L = startLive(t, librarianWho());
   try {
-    const res = await fetch("/api/chat/stream", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    if (!res.ok || !res.body) throw new Error((await res.text()) || res.statusText);
-    const reader = res.body.getReader(), dec = new TextDecoder();
-    let buf = "";
-    while (true) {
-      const { value, done: end } = await reader.read();
-      if (end) break;
-      buf += dec.decode(value, { stream: true });
-      let i;
-      while ((i = buf.indexOf("\n\n")) >= 0) {
-        const chunk = buf.slice(0, i); buf = buf.slice(i + 2);
-        if (!chunk.startsWith("data: ")) continue;
-        const ev = JSON.parse(chunk.slice(6));
-        const stick = atBottom();
-        if (ev.type === "queued") her.querySelector(".meta").textContent = ev.ready ? "writing…" : "waiting for the model to load…";
-        else if (ev.type === "thought") {
-          thought += ev.text;
-          setThoughts(her, allThoughts(), "Thinking…", true);
-          her.querySelector(".meta").textContent = "";
-        }
-        else if (ev.type === "spill") {   // untagged reasoning split off her reply: thoughts, not chat
-          spill = ev.text;
-          setThoughts(her, allThoughts(), "Thinking…", true);
-          her.querySelector(".meta").textContent = "";
-        }
-        else if (ev.type === "reply") {   // the cleaned reply so far (replaces, never raw)
-          if (ev.text && tEnd === null) {
-            tEnd = Date.now();
-            if (allThoughts()) setThoughts(her, allThoughts(), thoughtLabel({ thoughts: 1, thought_secs: Math.max(1, Math.round((tEnd - t0) / 1000)) }), false);
-          }
-          paint(t, ev.text, false); her.querySelector(".meta").textContent = "";
-        }
-        else if (ev.type === "done") done = ev;
-        else if (ev.type === "error") throw new Error(ev.error);
-        if (stick) toBottom();
-      }
-    }
-    if (!done) throw new Error("connection closed before the reply finished");
-    t.classList.remove("cursor");
-    paint(t, done.reply, false);
-    const meta = `${done.n_tokens} tokens${done.stopped_on_repeat ? " · stopped on repeat" : ""}`;
-    her.querySelector(".meta").textContent = meta;
-    const msg = { role: "assistant", content: done.reply, meta, who: librarianWho(), steers: (done.steers || []).map(x => x.label) };
-    if (done.thoughts) {
-      msg.thoughts = done.thoughts;
-      msg.thought_secs = Math.max(1, Math.round(((tEnd || Date.now()) - t0) / 1000));
-    }
-    setThoughts(her, msg.thoughts || "", thoughtLabel(msg), false);
-    state.session_id = done.session_id;
-    state.messages.push(msg); save();
-  } catch (e) {
-    her.remove();
-    state.messages.pop(); save();   // drop the unanswered user turn so history stays paired
-    log.lastElementChild && log.lastElementChild.classList.contains("user") && log.lastElementChild.remove();
-    input.value = text; autosize();
-    bubble("error", String(e.message || e));
-  }
-  toBottom();
+    const { done, secs } = await stream("/api/chat/stream", body, L);
+    t.session_id = done.session_id;
+    endLive(L, finishMsg(done, secs, { who: L.who }));
+  } catch (e) { endLive(L); unsend(t, text, e); }
+  if (t.id === tabs.active) toBottom();
 }
 
-function sys(text) {
-  state.messages.push({ role: "system", content: text }); save();
-  bubble("system", text); toBottom();
+// ---------------------------------------------------------------- F00003 / F00005: talking with checked-out personas
+const pickMember = (m) => ({ layer: m.layer, neuron: m.neuron, direction: m.direction, alpha: m.alpha, name: m.name });
+const transcriptOf = (t) => t.messages.filter(m => (m.role === "user" && !m.cmd) || m.role === "assistant")
+  .map(m => ({ speaker: m.role === "user" ? "user" : (m.who || t.name), content: m.content }));
+async function sendPersona(text, t) {
+  append(t, { role: "user", content: text });
+  const order = t.kind === "group" ? t.members.map((_, i) => i) : [null];   // a group answers in turn, each hearing the last
+  let got = 0;
+  for (const i of order) {
+    if (!tab(t.id)) return;   // checked in mid-turn
+    const who = i === null ? t.name : t.members[i].name;
+    const L = startLive(t, who, i ?? 0);
+    const body = { members: t.members.map(pickMember), mode: t.kind === "persona" ? "single" : t.kind, name: t.name,
+                   speaker: i, transcript: transcriptOf(t) };
+    try {
+      const { done, secs } = await stream("/api/persona/stream", body, L);
+      const m = finishMsg(done, secs, { who, mi: i ?? 0 });
+      m.meta += " · " + m.steers.join(" + ");
+      endLive(L, m); got++;
+    } catch (e) {
+      endLive(L);
+      if (!got) return unsend(t, text, e);
+      append(t, { role: "error", content: `${who}: ${String(e.message || e)}` }); break;
+    }
+  }
+  if (t.id === tabs.active) toBottom();
 }
+
+function sysTo(t, text) { append(t, { role: "system", content: text }); }
+const sys = (text) => sysTo(cur(), text);
+const errTo = (t, e) => t.id === tabs.active ? (bubble("error", String(e.message || e)), toBottom()) : append(t, { role: "error", content: String(e.message || e) });
 
 // "L12 N545 up" | "12 545" | "12:545:down" | "l12:n545" -> {L, N, dir|null}; null if not a neuron ref
 function neuronRef(rest) {
@@ -475,6 +692,7 @@ const cards = (rs) => rs.length ? rs.map(e => `${e.card}\n    ${(e.reply || "").
 async function command(line) {
   const [cmd, ...restParts] = line.slice(1).split(/\s+/);
   const rest = restParts.join(" ").trim();
+  const T = cur(), sys = (text) => sysTo(T, text);   // replies land in the tab the command was typed in
   const get = async (url) => { const r = await fetch(url); if (!r.ok) throw new Error(await r.text()); return r.json(); };
   try {
     if (cmd === "help") {
@@ -512,6 +730,38 @@ async function command(line) {
       if (!rest) sys(`On duty: ${voice().name} — ${voiceLabel(voice())}${prefs.voice ? "  (/librarian default restores L9 N367 down)" : "  (the default)"}`);
       else if (/^(default|reset|restore)$/i.test(rest)) setVoice(null);
       else setVoice(await resolveVoice(rest));
+    } else if (cmd === "checkout" || cmd === "co") {
+      await checkout(rest);
+    } else if (cmd === "checkin" || cmd === "ci") {
+      if (/^all$/i.test(rest)) {
+        const ps = tabs.tabs.filter(isPersona);
+        if (!ps.length) sys("Nobody is checked out.");
+        for (const t of ps) await doCheckin(t, "");
+      } else if (rest) {
+        const t = findTab(rest);
+        if (!t) throw new Error(`“${rest}” isn't checked out — /tabs lists who is`);
+        openCheckin(t);
+      } else openCheckin(T);
+    } else if (cmd === "alpha") {
+      if (!isPersona(T)) throw new Error("/alpha works in a persona's tab — for the Librarian use /librarian … --alpha X or Settings");
+      const m = rest.match(/^(.*?)\s*([+-]?\d*\.?\d+)$/);
+      if (!m) { sys(T.members.map(x => `${x.name}: ${memberLabel(x)}`).join("\n") + "\n\nusage: /alpha X  |  /alpha NAME X"); return; }
+      const a = Math.abs(parseFloat(m[2]));
+      if (!(a > 0 && a <= 3)) throw new Error("|α| must be between 0 and 3");
+      const who = m[1].trim().toLowerCase();
+      const ms = who ? T.members.filter(x => x.name.toLowerCase().includes(who)) : T.members;
+      if (!ms.length) throw new Error(`no “${m[1].trim()}” in this tab`);
+      ms.forEach(x => { x.alpha = a; }); save(); renderTabs(); renderHeader();
+      sys(ms.map(x => `${x.name} now pushed at ${memberLabel(x)}`).join("\n"));
+    } else if (cmd === "tabs") {
+      const ps = tabs.tabs.filter(isPersona);
+      sys((ps.length ? "checked out:\n" + ps.map(t => `  ${t.name} — ${t.kind === "persona" ? "" : t.kind + ": "}${t.members.map(memberLabel).join(" + ")}`).join("\n") : "nobody is checked out") +
+          (tabs.shelf.length ? "\n\nrecently checked in:\n" + tabs.shelf.slice(0, 8).map(t => `  ${t.name} — ${(t.keywords || []).join(" ")}`).join("\n") : ""));
+    } else if (cmd === "export") {
+      const [what, fmt] = rest.toLowerCase().split(/\s+/);
+      if (what === "neurons" || what === "neuron") sys(`exported ${exportNeurons()}`);
+      else if (what === "chats" || what === "chat") sys(`exported ${exportChats(fmt === "md" || fmt === "markdown" ? "md" : "json")}`);
+      else throw new Error("usage: /export neurons  ·  /export chats  ·  /export chats md   (also Settings → Export)");
     } else if (cmd === "settings") {
       openSettings();
     } else if (cmd === "skin" || cmd === "theme") {
@@ -522,7 +772,7 @@ async function command(line) {
     } else {
       throw new Error(`unknown command /${cmd} — try /help`);
     }
-  } catch (e) { bubble("error", String(e.message || e)); toBottom(); }
+  } catch (e) { errTo(T, e); }
 }
 
 // ---------------------------------------------------------------- F00006: change the librarian's persona
@@ -556,7 +806,7 @@ async function openSettings() {
   const v = voice();
   $("s-L").value = v.layer; $("s-N").value = v.neuron; $("s-A").value = v.alpha; $("s-name").value = ""; setDirBtn(v.direction);
   $("s-A").dataset.touched = "";
-  $("s-err").textContent = ""; renderOnDuty(); renderSkins();
+  $("s-err").textContent = ""; renderOnDuty(); renderSkins(); renderExportSummary();
   drawer.classList.add("open"); drawer.setAttribute("aria-hidden", "false"); backdrop.hidden = false;
   setTimeout(() => $("s-close").focus(), 50);
   try {   // filed persona names for the picker
@@ -584,26 +834,232 @@ $("s-apply").addEventListener("click", async () => {
 $("s-default").addEventListener("click", () => { setVoice(null); openSettings(); });
 $("s-skins").addEventListener("click", (ev) => { const b = ev.target.closest(".skin"); if (b) applySkin(b.dataset.skin); });
 
+// ---------------------------------------------------------------- F00008: export neurons + alphas, and chats
+const steerOf = (m) => ({ layer: m.layer, neuron: m.neuron, alpha: m.direction === "down" ? -Math.abs(m.alpha) : Math.abs(m.alpha), direction: m.direction, name: m.name });
+const stamp = () => new Date().toISOString().replace(/[:]/g, "").replace(/\..+/, "").replace("T", "-");
+function download(name, text, type) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name;
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  return name;
+}
+function neuronsDoc() {
+  const v = voice(), lib = { name: v.name, default: !prefs.voice, steers: [steerOf(v)] };
+  const ts = tabs.tabs.filter(isPersona).map(t => ({ name: t.name, kind: t.kind === "persona" ? "single" : t.kind, checked_out_at: t.checked_out_at,
+                                                     steers: t.members.map(steerOf) }));
+  const all = [lib, ...ts].flatMap(x => x.steers), seen = new Set();
+  return { format: "living-library/neurons@1", exported_at: new Date().toISOString(), model: serverInfo ? serverInfo.model : null,
+           steers: all.filter(x => { const k = `${x.layer}:${x.neuron}:${x.direction}`; return !seen.has(k) && seen.add(k); }),
+           librarian: lib, tabs: ts };
+}
+function exportNeurons() { return download(`living-library-neurons-${stamp()}.json`, JSON.stringify(neuronsDoc(), null, 2) + "\n", "application/json"); }
+function chatsDoc() {
+  const clean = (t, extra) => ({ name: isPersona(t) ? t.name : librarianWho(), kind: t.kind === "persona" ? "single" : t.kind,
+    members: isPersona(t) ? t.members.map(steerOf) : [steerOf(voice())], checked_out_at: t.checked_out_at || null, ...extra,
+    messages: t.messages.map(m => ({ role: m.role, speaker: m.role === "user" ? "you" : m.role === "assistant" ? (m.who || librarianWho()) : m.role,
+      command: !!m.cmd, content: m.content, ...(m.thoughts ? { thoughts: m.thoughts } : {}), ...(m.steers ? { steers: m.steers } : {}),
+      ...(m.meta ? { meta: m.meta } : {}), at: m.at || null })) });
+  return { format: "living-library/chats@1", exported_at: new Date().toISOString(), model: serverInfo ? serverInfo.model : null,
+           tabs: tabs.tabs.map(t => clean(t)),
+           checked_in: tabs.shelf.map(t => clean(t, { checked_in_at: t.checked_in_at, keywords: t.keywords || [], keyword_source: t.keyword_source })) };
+}
+function chatsMarkdown(d) {
+  const when = (x) => x ? new Date(x).toLocaleString() : "";
+  const block = (t, title) => {
+    const head = [`## ${title || t.name}`, "", `*${t.kind}* · ${t.members.map(m => `L${m.layer} N${m.neuron} ${m.direction} α ${m.alpha > 0 ? "+" : ""}${m.alpha}`).join(" + ")}` +
+      (t.checked_out_at ? ` · checked out ${when(t.checked_out_at)}` : "") + (t.checked_in_at ? ` · checked in ${when(t.checked_in_at)}` : ""),
+      ...(t.keywords && t.keywords.length ? ["", `**Keywords:** ${t.keywords.join(" ")}${t.keyword_source === "librarian" ? " *(by the Librarian)*" : ""}`] : []), ""];
+    const body = t.messages.map(m => {
+      if (m.role === "system" || m.role === "error") return "```\n" + m.content + "\n```\n";
+      const th = m.thoughts ? `<details><summary>Thoughts</summary>
+
+${m.thoughts.replace(/^/gm, "> ")}
+
+</details>
+
+` : "";
+      const txt = m.command ? "`" + m.content + "`" : m.content;
+      return `**${m.speaker === "you" ? "You" : m.speaker}**${m.at ? ` · ${when(m.at)}` : ""}
+
+${th}${txt}
+`;
+    });
+    return [...head, ...(body.length ? body : ["*(no messages)*\n"])].join("\n");
+  };
+  return [`# Living Library — chats`, "", `Exported ${when(d.exported_at)} · ${d.model || "Qwen3-8B"}`, "",
+          ...d.tabs.map(t => block(t)), ...(d.checked_in.length ? ["# Checked in", "", ...d.checked_in.map(t => block(t, `${t.name} (checked in)`))] : [])].join("\n");
+}
+function exportChats(fmt) {
+  const d = chatsDoc();
+  return fmt === "md" ? download(`living-library-chats-${stamp()}.md`, chatsMarkdown(d), "text/markdown")
+                      : download(`living-library-chats-${stamp()}.json`, JSON.stringify(d, null, 2) + "\n", "application/json");
+}
+function renderExportSummary() {
+  const d = neuronsDoc(), n = tabs.tabs.reduce((a, t) => a + t.messages.length, 0) + tabs.shelf.reduce((a, t) => a + t.messages.length, 0);
+  $("ex-sum").innerHTML = [`<b>Librarian</b>  ${esc(voiceLabel(voice()))}`,
+    ...d.tabs.map(t => `<b>${esc(t.name)}</b>  ${esc(t.steers.map(x => `L${x.layer} N${x.neuron} ${x.direction} α ${fmtA(x.alpha)}`).join(" + "))}`),
+    `${d.steers.length} neuron${d.steers.length === 1 ? "" : "s"} active · ${tabs.tabs.length + tabs.shelf.length} chat${tabs.tabs.length + tabs.shelf.length === 1 ? "" : "s"}, ${n} messages`].join("\n");
+}
+$("ex-neurons").addEventListener("click", exportNeurons);
+$("ex-chats").addEventListener("click", () => exportChats("json"));
+$("ex-md").addEventListener("click", () => exportChats("md"));
+
 async function resetChat() {
-  if (state.session_id) {
-    try { await fetch("/api/reset", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ session_id: state.session_id }) }); } catch (e) {}
+  const t = cur();
+  if (!isPersona(t) && t.session_id) {
+    try { await fetch("/api/reset", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ session_id: t.session_id }) }); } catch (e) {}
   }
-  state = { session_id: state.session_id, messages: [] }; save(); renderAll();
+  t.messages = []; save(); renderAll();
 }
 
 $("form").addEventListener("submit", async (ev) => {
   ev.preventDefault();
-  const text = input.value.trim();
-  if (!text || busy) return;
+  const text = input.value.trim(), t = cur();
+  if (!text || busyTabs.has(t.id)) return;
   input.value = ""; autosize(); remember(text); closeMenu(); renderArgHint();
-  setBusy(true);
-  if (text.startsWith("/")) {   // show your command on the right too (kept out of her chat history)
-    state.messages.push({ role: "user", content: text, cmd: true }); save();
-    bubble("user", text, "", "", "", true); toBottom();
-  }
-  try { text.startsWith("/") ? await command(text) : await sendChat(text); }
-  finally { setBusy(false); input.focus(); }
+  setBusy(t, true);
+  if (text.startsWith("/")) append(t, { role: "user", content: text, cmd: true });   // shown on the right, kept out of chat history
+  try { text.startsWith("/") ? await command(text) : isPersona(t) ? await sendPersona(text, t) : await sendChat(text, t); }
+  finally { if (tab(t.id)) setBusy(t, false); else { busyTabs.delete(t.id); sendBtn.disabled = busyTabs.has(cur().id); } if (t.id === tabs.active) input.focus(); }
 });
+
+// ---------------------------------------------------------------- F00004: the side tabs
+const nav = $("tabs");
+function tabSub(t) {
+  if (!isPersona(t)) return prefs.voice ? voiceLabel(voice()) : "the catalogue desk";
+  if (t.kind === "group") return `group · ${t.members.length} voices`;
+  if (t.kind === "mix") return `mix · ${t.members.map(m => `L${m.layer}N${m.neuron}`).join("+")}`;
+  return memberLabel(t.members[0]);
+}
+function renderTabs() {
+  const row = (t, i) => `<div class="tab${t.id === tabs.active ? " on" : ""}${busyTabs.has(t.id) ? " busy" : ""}" role="tab" tabindex="0" aria-selected="${t.id === tabs.active}" data-id="${esc(t.id)}" title="${esc(t.name)}${i < 9 ? ` (Ctrl+${i + 1})` : ""}">` +
+    `${avatarHTML(t)}<span class="tx"><span class="nm">${esc(isPersona(t) ? t.name : librarianWho())}</span><span class="sb">${esc(tabSub(t))}</span></span>` +
+    `${t.unread ? '<span class="unread" title="new replies"></span>' : ""}` +
+    `${isPersona(t) ? `<button class="x" data-checkin="${esc(t.id)}" title="Check in ${esc(t.name)}" aria-label="Check in ${esc(t.name)}">↩</button>` : ""}</div>`;
+  const [lib, ...out] = tabs.tabs;
+  nav.innerHTML = `<div class="tabs-h">Desk</div>${row(lib, 0)}` +
+    `<div class="tabs-h">Checked out${out.length ? ` <span class="n">${out.length}</span>` : ""}</div>` +
+    out.map((t, i) => row(t, i + 1)).join("") +
+    (out.length ? "" : `<div class="tabs-none">No one yet. Check out a persona to give it its own room.</div>`) +
+    `<button class="add" id="add-tab" type="button">＋ Check out a persona</button>` +
+    `<div class="tabs-foot">${tabs.shelf.length ? `${tabs.shelf.length} checked in · ` : ""}<kbd>Ctrl</kbd>+<kbd>1</kbd>…<kbd>9</kbd> switch</div>`;
+}
+function switchTab(id) {
+  const t = tab(id); if (!t) return;
+  if (tabs.active !== id) {
+    const L = lives.get(tabs.active); if (L) L.el = null;
+    tabs.active = id;
+  }
+  t.unread = false; save();
+  renderTabs(); renderAll(); renderHeader();
+  sendBtn.disabled = busyTabs.has(id);
+  nav.classList.remove("open");
+  input.focus();
+}
+nav.addEventListener("click", (ev) => {
+  const ci = ev.target.closest("[data-checkin]");
+  if (ci) { ev.stopPropagation(); openCheckin(tab(ci.dataset.checkin)); return; }
+  if (ev.target.closest("#add-tab")) { switchTab("librarian"); input.value = "/checkout "; autosize(); renderArgHint(); input.focus(); return; }
+  const r = ev.target.closest(".tab"); if (r) switchTab(r.dataset.id);
+});
+nav.addEventListener("keydown", (ev) => { const r = ev.target.closest(".tab"); if (r && (ev.key === "Enter" || ev.key === " ")) { ev.preventDefault(); switchTab(r.dataset.id); } });
+document.addEventListener("keydown", (ev) => {
+  if (ev.ctrlKey && !ev.metaKey && !ev.altKey && /^[1-9]$/.test(ev.key)) {
+    const t = tabs.tabs[+ev.key - 1]; if (t) { ev.preventDefault(); switchTab(t.id); }
+  } else if (ev.altKey && (ev.key === "ArrowUp" || ev.key === "ArrowDown") && !menu.open) {
+    const i = tabs.tabs.indexOf(cur()), n = tabs.tabs.length;
+    ev.preventDefault(); switchTab(tabs.tabs[(i + (ev.key === "ArrowDown" ? 1 : n - 1)) % n].id);
+  }
+});
+$("menu-btn").addEventListener("click", (ev) => { ev.stopPropagation(); nav.classList.toggle("open"); });
+document.addEventListener("click", (ev) => { if (nav.classList.contains("open") && !nav.contains(ev.target)) nav.classList.remove("open"); });
+$("checkin-btn").addEventListener("click", () => openCheckin(cur()));
+
+// ---------------------------------------------------------------- F00003 / F00005: check out, check in
+const memberKey = (m) => `${m.layer}:${m.neuron}:${m.direction}`;
+async function checkout(spec) {
+  if (!spec) throw new Error('usage: /checkout NAME | L:N[:up|down][:α] [+ …] [--mix] [--alpha X]   e.g. /checkout emily · /checkout 12:545:up:0.8 · /checkout emily + smallpox --mix');
+  const r = await resolve(spec);
+  let members = r.members.map(m => ({ layer: m.layer, neuron: m.neuron, direction: m.direction, alpha: m.alpha,
+                                      name: m.persona || m.label, card: m.filed ? (m.persona || "") : "", tags: m.tags || [] }));
+  const seen = {};   // two members with the same persona name -> tell them apart
+  members.forEach(m => { seen[m.name] = (seen[m.name] || 0) + 1; });
+  members.forEach(m => { if (seen[m.name] > 1) m.name = `${m.name} (L${m.layer} N${m.neuron})`; });
+  const kind = members.length === 1 ? "persona" : r.mix ? "mix" : "group";
+  const key = kind + "|" + members.map(memberKey).sort().join(",");
+  const open = tabs.tabs.find(t => isPersona(t) && t.kind + "|" + t.members.map(memberKey).sort().join(",") === key);
+  if (open) { switchTab(open.id); sys(`${open.name} is already checked out — here's your tab.`); return; }
+  const name = kind === "mix" ? members.map(m => m.name).join(" + ") : kind === "group" ? members.map(m => m.name).join(", ") : members[0].name;
+  const t = { id: "t" + Date.now().toString(36), kind, name, members, messages: [], checked_out_at: new Date().toISOString() };
+  tabs.tabs.push(t); save();
+  const what = members.map(memberLabel).join(" + ");
+  sysTo(tab("librarian"), `Checked out ${name}${kind === "group" ? " (group chat)" : kind === "mix" ? " (one blended voice)" : ""} — ${what}. It has its own tab on the left.`);
+  switchTab(t.id);
+}
+
+const dlg = $("checkin"), kwIn = $("ci-kw");
+let ciTab = null;
+function kwList(s) { return [...new Set(String(s || "").toLowerCase().split(/[\s,;]+/).map(w => w.replace(/[^\p{L}\p{N}'-]/gu, "")).filter(Boolean))]; }
+function renderChips() {
+  const ws = kwList(kwIn.value);
+  $("ci-chips").innerHTML = ws.map((w, i) => `<span class="chip${i >= 5 ? " over" : ""}">${esc(w)}</span>`).join("") +
+    `<span class="count${ws.length === 5 ? " ok" : ws.length > 5 ? " over" : ""}">${ws.length}/5</span>`;
+  $("ci-go").textContent = ws.length ? "Check in" : "Check in — Librarian picks";
+}
+function openCheckin(t) {
+  if (!t || !isPersona(t)) { sys("Nothing to check in here — this is the Librarian's desk. /checkin NAME, or open a persona's tab."); return; }
+  ciTab = t;
+  const turns = t.messages.filter(m => m.role === "user" && !m.cmd).length;
+  const mins = Math.max(0, Math.round((Date.now() - Date.parse(t.checked_out_at)) / 60000));
+  $("ci-av").innerHTML = avatarHTML(t, "av big");
+  $("ci-name").textContent = `Check in ${t.name}`;
+  $("ci-sub").innerHTML = `${t.members.map(m => highlight(memberLabel(m), false)).join(" + ")}<br>${turns} turn${turns === 1 ? "" : "s"} · out for ${mins < 1 ? "under a minute" : mins + " min"}`;
+  kwIn.value = ""; $("ci-err").textContent = ""; $("ci-status").textContent = "";
+  dlg.classList.remove("working"); [$("ci-go"), $("ci-skip"), kwIn].forEach(x => x.disabled = false);
+  renderChips(); dlg.showModal(); kwIn.focus();
+}
+async function doCheckin(t, keywords) {
+  const body = { members: t.members.map(pickMember), mode: t.kind === "persona" ? "single" : t.kind, name: t.name,
+                 transcript: transcriptOf(t), keywords, checked_out_at: t.checked_out_at };
+  const r = await fetch("/api/checkin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (!r.ok) { let d = await r.text(); try { d = JSON.parse(d).detail || d; } catch (e) {} throw new Error(d); }
+  const j = await r.json();
+  const L = lives.get(t.id); if (L) lives.delete(t.id);
+  const turns = body.transcript.filter(x => x.speaker === "user").length;
+  tabs.shelf.unshift({ ...t, unread: false, checked_in_at: new Date().toISOString(), keywords: j.keywords, keyword_source: j.source });
+  tabs.shelf = tabs.shelf.slice(0, 50);
+  tabs.tabs = tabs.tabs.filter(x => x.id !== t.id);
+  if (tabs.active === t.id) tabs.active = "librarian";
+  save();
+  sysTo(tab("librarian"), `Checked in ${t.name} — ${t.members.map(memberLabel).join(" + ")} · ${turns} turn${turns === 1 ? "" : "s"}\n` +
+    `keywords: ${j.keywords.join(" ")}  (${j.source === "user" ? "yours" : "read from the chat by the Librarian"})` +
+    (j.tagged && j.tagged.length ? `\nadded to the card tags of ${j.tagged.join(", ")}` : ""));
+  switchTab(tabs.active);
+  return j;
+}
+async function submitCheckin(skip) {
+  const t = ciTab; if (!t) return;
+  const kws = skip ? "" : kwList(kwIn.value).slice(0, 5).join(" ");
+  dlg.classList.add("working"); [$("ci-go"), $("ci-skip"), kwIn].forEach(x => x.disabled = true); $("ci-err").textContent = "";
+  $("ci-status").textContent = kws ? "Filing your keywords…" : "The Librarian is reading the chat…";
+  try { await doCheckin(t, kws); dlg.close(); ciTab = null; }
+  catch (e) { $("ci-err").textContent = String(e.message || e); dlg.classList.remove("working"); [$("ci-go"), $("ci-skip"), kwIn].forEach(x => x.disabled = false); $("ci-status").textContent = ""; }
+}
+kwIn.addEventListener("input", renderChips);
+kwIn.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); submitCheckin(false); } });
+$("ci-go").addEventListener("click", () => submitCheckin(false));
+$("ci-skip").addEventListener("click", () => submitCheckin(true));
+$("ci-cancel").addEventListener("click", () => dlg.close());
+dlg.addEventListener("cancel", (ev) => { if (dlg.classList.contains("working")) ev.preventDefault(); });
+dlg.addEventListener("close", () => { if (!dlg.classList.contains("working")) input.focus(); });
+function findTab(q) {
+  const ref = neuronRef(q);
+  const ps = tabs.tabs.filter(isPersona);
+  if (ref) return ps.find(t => t.members.some(m => m.layer === ref.L && m.neuron === ref.N && (!ref.dir || m.direction === ref.dir)));
+  const lq = q.toLowerCase();
+  return ps.find(t => t.name.toLowerCase() === lq) || ps.find(t => t.name.toLowerCase().includes(lq));
+}
+
 // ---------------------------------------------------------------- F00002: slash menu
 function helpText() {
   const w = Math.max(...COMMANDS.map(c => c.name.length + 1 + (c.args ? c.args.length + 1 : 0)));
@@ -696,7 +1152,7 @@ input.addEventListener("blur", () => setTimeout(closeMenu, 120));
 // shell-style recall: ↑ / ↓ step through what you sent (messages and /commands)
 const SENT_KEY = "librarian-sent-v1";
 let sent = JSON.parse(localStorage.getItem(SENT_KEY) || "null")
-  || state.messages.filter(m => m.role === "user").map(m => m.content);
+  || tabs.tabs[0].messages.filter(m => m.role === "user").map(m => m.content);
 let sentIdx = sent.length, draft = "";
 function remember(text) {
   if (sent[sent.length - 1] !== text) sent.push(text);
@@ -727,8 +1183,9 @@ function autosize() { input.style.height = "auto"; input.style.height = Math.min
 input.addEventListener("input", autosize);
 input.addEventListener("scroll", () => { hl.scrollTop = input.scrollTop; });
 document.querySelectorAll("[data-hl]").forEach(el => { el.innerHTML = highlight(el.textContent, false); });
-$("newchat").addEventListener("click", () => { if (!busy) resetChat(); });
+$("newchat").addEventListener("click", () => { if (!busyTabs.has(cur().id)) resetChat(); });
 
+renderTabs();
 renderAll();
 renderHeader();
 health();
