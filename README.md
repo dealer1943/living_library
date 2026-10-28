@@ -1,6 +1,6 @@
 # Living Library
 
-> **Status: pre-MVP.** Feature lineage lives in [`features/`](features/README.md).
+> **Status: pre-MVP (near-MVP polish).** Feature lineage lives in [`features/`](features/README.md) — see [Features index](#features-index) below.
 
 **Living Library** is a local lab and a chat interface for the *personas that live inside
 single neurons* of a language model. Push one MLP neuron of Qwen3-8B up or down and ask
@@ -9,13 +9,17 @@ The Library catalogues those personas and lets you talk to them:
 
 - **The chief librarian** (Layer 9 · Neuron 367 pushed down — the Librarian of Alexandria)
   runs the catalogue: she probes neurons, files each reply under a persona name, and answers
-  questions about the shelves. You can put a different neuron behind her desk.
+  questions about the shelves. Swapping a different neuron behind her desk is wired
+  (`/librarian`, Settings) but **deferred past MVP** — [F00006](features/F00006_change_librarian_persona.md) /
+  [F00007](features/F00007_settings_librarian_neuron.md).
 - **Check out a neuron** like a book and chat with that persona in its own side tab; check it
   back in with five keywords (or let the Librarian write them from the chat).
 - **Hybrid checkouts**: several neurons at once — blended into one voice with `--mix`, or as a
   group chat where every persona and you share one context.
-- A web chat with a slash-command palette, color-coded commands, skins, and exports of the
-  active neurons/alphas and of every chat.
+- A web chat with a slash-command palette, color-coded commands, skins, exports of the
+  active neurons/alphas and of every chat, `/name` tab renaming, Copy and Share-as-image
+  under every bubble, auto-continue when a reply hits the token limit, and α retuning from
+  the desk (`/alpha` or plain "alpha 0.7").
 
 It reproduces the single-neuron method of the
 [Neuron Persona Library](https://qwen-neurons-site.vercel.app/) and lets you stack
@@ -184,7 +188,7 @@ color-coded in the box and in the chat). `/help` lists everything:
 | `/name LABEL` · `/name reset` | rename the active tab (also: click the title top left, double-click a tab or its ✎) |
 | `/share` · `/share all` · `/share last N` | pick messages → a PNG card to download or copy (also the Share button, or the icon under a bubble) |
 | `/tabs` | who is checked out, and the last check-ins |
-| `/librarian [L:N:dir [--alpha X] \| NAME \| default]` | put a different neuron behind her desk, or restore L9 N367 down |
+| `/librarian [L:N:dir [--alpha X] \| NAME \| default]` | put a different neuron behind her desk, or restore L9 N367 down *(deferred: [F00006](features/F00006_change_librarian_persona.md)/[F00007](features/F00007_settings_librarian_neuron.md), untested)* |
 | `/export neurons` · `/export chats [md]` | download the active neurons + α (JSON, `who --json`-compatible) or every chat |
 | `/skin NAME` · `/settings` · `/reset` | Alexandria, Parchment, Midnight, Terminal, Marble · the settings drawer (top right) · clear this tab |
 
@@ -216,13 +220,29 @@ in `librarian.py`, the same object the terminal REPL uses.
 
 ## Hardware notes
 
-- **Disk:** the bf16 weights take about **16 GB**. They download to the HF cache
-  (`~/.cache/huggingface`) on first run.
-- **Mac (MPS):** the model loads straight onto `mps` in bf16, or fp16 if bf16 isn't
-  supported. The weights alone are about 16 GB, so a **24 GB Mac** will be tight
-  and may need a 4-bit quantised load later (not implemented yet). Closing other
-  apps helps.
-- CUDA uses `device_map="auto"`. CPU works but is slow.
+- **MLX 4-bit (default for `librarian` / `serve`):** ~**4.6 GB**, comfortable on a **24 GB** Apple Silicon Mac. This is what we develop on (`mlx-community/Qwen3-8B-4bit`).
+- **Torch bf16 (`Qwen/Qwen3-8B`):** ~**16 GB** in the HF cache; a 24 GB Mac is tight if other apps are open. CUDA uses `device_map="auto"`. CPU works but is slow.
+
+
+## Features index
+
+One doc per feature under [`features/`](features/README.md) (verification stamps live there).
+
+| # | feature | state |
+|---|---|---|
+| [F00001](features/F00001_command_color_coding.md) | Color-coded commands and parameters | Verified |
+| [F00002](features/F00002_slash_command_menu.md) | Slash menu with filtering and autocomplete | Verified |
+| [F00003](features/F00003_checkout_checkin_neurons.md) | Check out / check in neurons (five keywords) | Verified |
+| [F00004](features/F00004_persona_side_tabs.md) | A side tab for each persona | Verified |
+| [F00005](features/F00005_hybrid_checkout_mix_and_group.md) | Hybrid checkout: `--mix` blend or group chat | Verified |
+| [F00006](features/F00006_change_librarian_persona.md) | Change the Librarian's persona | Future / deferred (post-MVP) |
+| [F00007](features/F00007_settings_librarian_neuron.md) | Settings: Librarian neuron / restore default | Future / deferred (post-MVP) |
+| [F00008](features/F00008_settings_export.md) | Settings: export neurons + alphas, and chats | Verified |
+| [F00009](features/F00009_settings_skins.md) | Settings: skins / styles | Verified |
+| [F00010](features/F00010_rename_tabs.md) | Rename tabs: `/name`, ✎, double-click | Verified |
+| [F00011](features/F00011_copy_message.md) | Copy button under each bubble | Verified |
+| [F00012](features/F00012_share_as_image.md) | Share selected chats as a PNG card | Verified |
+| [F00013](features/F00013_continue_cut_replies.md) | Continue token-limit / interrupted replies in a new bubble | Verified |
 
 ## Caveats (also from the site)
 
