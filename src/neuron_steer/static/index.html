@@ -271,18 +271,36 @@ try { document.documentElement.dataset.skin = (JSON.parse(localStorage.getItem("
   .sh-actions .spacer { flex: 1; }
   .sh-status { font-size: 13px; color: var(--accent); }
   /* F00014: the Lounge — everyone checked in, at one table */
-  #lounge-bar { max-width: 820px; margin: 0 auto; padding: 10px 20px 0; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); }
-  #lounge-bar[hidden] { display: none; }
-  #lounge-bar .lv { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--line); border-left: 3px solid var(--pc); border-radius: 999px; padding: 2px 3px 2px 9px; background: var(--bg); }
-  #lounge-bar .lv.muted { opacity: .5; } #lounge-bar .lv.muted .ln { text-decoration: line-through; }
-  #lounge-bar .ln { font: 600 13px var(--serif); color: var(--pc); }
-  #lounge-bar label { display: inline-flex; align-items: center; gap: 3px; font: 12px var(--mono); }
-  #lounge-bar input { width: 54px; background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 1px 4px; font: 12px var(--mono); outline: none; }
-  #lounge-bar input:focus { border-color: var(--accent); }
-  #lounge-bar button { padding: 1px 8px; font-size: 12px; border-radius: 999px; }
-  #lounge-bar .ctl { margin-left: auto; display: inline-flex; gap: 4px; flex-wrap: wrap; }
-  #lounge-bar .st { font: 600 11px var(--sans); text-transform: uppercase; letter-spacing: .06em; }
-  #lounge-bar .st.on { color: #7bbf6a; } #lounge-bar .st.off { color: var(--err); }
+  /* F00014 polish: voices live in a collapsible, scrollable panel to the right of the chat */
+  #lounge-panel { width: 272px; flex: none; border-left: 1px solid var(--line); background: var(--panel); display: flex; flex-direction: column; min-height: 0; font-size: 12.5px; color: var(--muted); }
+  #lounge-panel[hidden] { display: none; }
+  #lounge-panel.collapsed { width: 38px; }
+  #lounge-panel .lp-head { position: sticky; top: 0; z-index: 1; background: var(--panel); border-bottom: 1px solid var(--line); padding: 10px 10px 8px; display: flex; flex-direction: column; gap: 7px; }
+  #lounge-panel .lp-top { display: flex; align-items: center; gap: 8px; }
+  #lounge-panel .lp-title { font: 600 14px var(--serif); color: var(--ink); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #lounge-panel .lp-title small { font: 12px var(--sans); color: var(--muted); }
+  #lounge-panel .lp-ctl { display: flex; gap: 4px; flex-wrap: wrap; }
+  #lounge-panel button { padding: 1px 8px; font-size: 12px; border-radius: 999px; }
+  #lounge-panel button.lp-tog { padding: 0 7px; border-radius: 6px; font-size: 14px; line-height: 22px; }
+  #lounge-panel .lp-list { flex: 1; overflow-y: auto; padding: 8px 8px 12px; display: flex; flex-direction: column; gap: 5px; }
+  #lounge-panel .lv { display: flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-left: 3px solid var(--pc); border-radius: 8px; padding: 4px 4px 4px 8px; background: var(--bg); }
+  #lounge-panel .lv.muted { opacity: .5; } #lounge-panel .lv.muted .ln { text-decoration: line-through; }
+  #lounge-panel .ln { font: 600 13px var(--serif); color: var(--pc); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #lounge-panel label { display: inline-flex; align-items: center; gap: 3px; font: 12px var(--mono); flex: none; }
+  #lounge-panel input { width: 54px; background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 1px 4px; font: 12px var(--mono); outline: none; }
+  #lounge-panel input:focus { border-color: var(--accent); }
+  #lounge-panel .lv button { flex: none; min-width: 58px; }
+  #lounge-panel .lp-none { padding: 6px 4px; }
+  #lounge-panel .st { font: 600 11px var(--sans); text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; }
+  #lounge-panel .st.on { color: #7bbf6a; } #lounge-panel .st.off { color: var(--err); }
+  #lounge-panel .lp-strip { flex: 1; width: 100%; border: 0; border-radius: 0; padding: 10px 0; display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--muted); }
+  #lounge-panel .lp-strip:hover { color: var(--ink); background: var(--bg); }
+  #lounge-panel .lp-strip .vt { writing-mode: vertical-rl; font: 600 12px var(--sans); letter-spacing: .08em; text-transform: uppercase; }
+  #lounge-panel .lp-strip .n { font: 600 12px var(--mono); color: var(--ink); border: 1px solid var(--line); border-radius: 999px; padding: 0 6px; }
+  #lounge-panel .lp-strip .dotl { width: 8px; height: 8px; border-radius: 50%; background: #7bbf6a; } #lounge-panel .lp-strip .dotl.off { background: var(--err); }
+  @media (max-width: 760px) {
+    #lounge-panel:not(.collapsed) { position: fixed; top: 0; bottom: 0; right: 0; z-index: 41; width: min(300px, 86vw); box-shadow: -16px 0 48px var(--shadow); }
+  }
   .av.lounge-av { background: var(--accent); color: var(--accent-ink); }
   .tab.lounge-off .nm { opacity: .6; }
   #log[data-kind="lounge"] .empty { margin-top: 9vh; }
@@ -337,7 +355,6 @@ try { document.documentElement.dataset.skin = (JSON.parse(localStorage.getItem("
 <div id="stage">
 <main id="scroll"><div id="log"></div></main>
 <footer>
-  <div id="lounge-bar" hidden aria-label="Lounge controls"></div>
   <div id="selbar" hidden><span>Pick messages to share · <b id="sel-n">0 selected</b></span><span class="spacer"></span>
     <button type="button" id="sel-all">All</button><button type="button" id="sel-none">None</button><button type="button" id="sel-cancel">Cancel</button>
     <button type="button" class="primary" id="sel-go">Make image</button></div>
@@ -353,6 +370,7 @@ try { document.documentElement.dataset.skin = (JSON.parse(localStorage.getItem("
   <div class="hint" id="hint" data-hl>Enter to send · Shift+Enter for a new line · /checkout NAME · /checkin · /lounge · /find /probe L:N[:up|down] --alpha X · /help</div>
 </footer>
 </div>
+<aside id="lounge-panel" hidden aria-label="Lounge voices"></aside>
 </div>
 <dialog id="checkin" aria-labelledby="ci-name">
   <div class="ci-top"><div id="ci-av"></div><div><h2 id="ci-name">Check in</h2><div class="ci-sub" id="ci-sub"></div></div></div>
@@ -1431,24 +1449,38 @@ async function loungeCmd(arg, T) {
       : `The lounge already has everyone on the shelf (${Lg.members.length}).`);
   } else throw new Error("usage: /lounge [on | off | reset | archive | sync | status]");
 }
-function renderLoungeBar() {
-  const bar = $("lounge-bar"), t = cur();
-  if (!isLounge(t)) { bar.hidden = true; bar.innerHTML = ""; return; }
+function renderLoungeBar() {   // F00014 polish: renders the right-side voices panel (collapsible, scrollable)
+  const bar = $("lounge-panel"), t = cur();
+  if (!isLounge(t)) { bar.hidden = true; bar.innerHTML = ""; bar.classList.remove("collapsed"); return; }
   if (bar.contains(document.activeElement) && document.activeElement.tagName === "INPUT") return;   // don't wipe an α being typed
   bar.hidden = false;
-  const on = t.on !== false;
-  bar.innerHTML = `<span class="st ${on ? "on" : "off"}">${on ? "● on" : "○ off"}</span>` +
-    (t.members.length ? t.members.map((m, i) => `<span class="lv${m.muted ? " muted" : ""}" style="--pc:${palVar(i)}" title="${esc(m.name)} — ${esc(memberLabel(m))}">` +
-      `<span class="ln">${esc(m.name)}</span><label title="|α| for ${esc(m.name)} (Enter to apply)">α<input type="number" step="0.05" min="0.05" max="3" value="${+m.alpha}" data-lalpha="${i}" aria-label="alpha for ${esc(m.name)}"></label>` +
-      `<button type="button" data-lmute="${i}" aria-pressed="${!!m.muted}" title="${m.muted ? "Let" : "Skip"} ${esc(m.name)}${m.muted ? " speak again" : "'s turn"} (/${m.muted ? "unmute" : "mute"} NAME)">${m.muted ? "unmute" : "mute"}</button></span>`).join("")
-      : `<span>nobody on the shelf yet — check someone in first</span>`) +
-    `<span class="ctl"><button type="button" data-lounge="${on ? "off" : "on"}"${on ? "" : ' class="primary"'} title="${on ? "Pause the lounge (/lounge off)" : "Let them talk (/lounge on)"}">${on ? "⏸ Turn off" : "▶ Turn on"}</button>` +
+  const on = t.on !== false, n = t.members.length, mu = t.members.filter(m => m.muted).length;
+  const collapsed = !!t.panelCollapsed;
+  bar.classList.toggle("collapsed", collapsed);
+  if (collapsed) {
+    bar.innerHTML = `<button type="button" class="lp-strip" data-lpanel="open" aria-expanded="false" title="Show the voices panel (${n} voice${n === 1 ? "" : "s"}${mu ? `, ${mu} muted` : ""}, lounge ${on ? "on" : "off"})">` +
+      `<span aria-hidden="true">‹</span><span class="dotl${on ? "" : " off"}"></span><span class="n">${n}</span><span class="vt">Voices</span></button>`;
+    return;
+  }
+  const keep = bar.querySelector(".lp-list"), top = keep ? keep.scrollTop : 0;
+  bar.innerHTML = `<div class="lp-head"><div class="lp-top"><span class="st ${on ? "on" : "off"}">${on ? "● on" : "○ off"}</span>` +
+      `<span class="lp-title">Voices <small>· ${n}${mu ? ` (${mu} muted)` : ""}</small></span>` +
+      `<button type="button" class="lp-tog" data-lpanel="close" aria-expanded="true" title="Collapse the voices panel">›</button></div>` +
+    `<div class="lp-ctl"><button type="button" data-lounge="${on ? "off" : "on"}"${on ? "" : ' class="primary"'} title="${on ? "Pause the lounge (/lounge off)" : "Let them talk (/lounge on)"}">${on ? "⏸ Off" : "▶ On"}</button>` +
     `<button type="button" data-lounge="sync" title="Re-read the shelf (/lounge sync)">⟳ Sync</button>` +
     `<button type="button" data-lounge="reset" title="Clear the lounge's messages (/lounge reset)">Reset</button>` +
-    `<button type="button" data-lounge="archive" title="Hide the lounge, keep its history — /lounge reopens it">Archive</button></span>`;
+    `<button type="button" data-lounge="archive" title="Hide the lounge, keep its history — /lounge reopens it">Archive</button></div></div>` +
+    `<div class="lp-list">` +
+    (n ? t.members.map((m, i) => `<div class="lv${m.muted ? " muted" : ""}" style="--pc:${palVar(i)}" title="${esc(m.name)} — ${esc(memberLabel(m))}">` +
+      `<span class="ln">${esc(m.name)}</span><label title="|α| for ${esc(m.name)} (Enter to apply)">α<input type="number" step="0.05" min="0.05" max="3" value="${+m.alpha}" data-lalpha="${i}" aria-label="alpha for ${esc(m.name)}"></label>` +
+      `<button type="button" data-lmute="${i}" aria-pressed="${!!m.muted}" title="${m.muted ? "Let" : "Skip"} ${esc(m.name)}${m.muted ? " speak again" : "'s turn"} (/${m.muted ? "unmute" : "mute"} NAME)">${m.muted ? "unmute" : "mute"}</button></div>`).join("")
+      : `<div class="lp-none">nobody on the shelf yet — check someone in first</div>`) + `</div>`;
+  const list = bar.querySelector(".lp-list"); if (list) list.scrollTop = top;
 }
-$("lounge-bar").addEventListener("click", async (ev) => {
+$("lounge-panel").addEventListener("click", async (ev) => {
   const t = cur(); if (!isLounge(t)) return;
+  const pb = ev.target.closest("[data-lpanel]");
+  if (pb) { t.panelCollapsed = pb.dataset.lpanel === "close"; save(); renderLoungeBar(); return; }   // remembered with the lounge (localStorage)
   const mb = ev.target.closest("[data-lmute]");
   if (mb) { const m = t.members[+mb.dataset.lmute]; if (!m) return; m.muted = !m.muted; save();
     sysTo(t, m.muted ? `Muted ${m.name} — sitting out their turns.` : `Unmuted ${m.name} — back at the table.`); renderTabs(); renderHeader(); return; }
@@ -1457,7 +1489,7 @@ $("lounge-bar").addEventListener("click", async (ev) => {
     if (a === "reset" && t.messages.length && !confirm(`Clear the lounge's ${t.messages.length} messages? (Archive keeps them instead.)`)) return;
     try { await loungeCmd(a, t); } catch (e) { errTo(t, e); } }
 });
-$("lounge-bar").addEventListener("change", (ev) => {
+$("lounge-panel").addEventListener("change", (ev) => {
   const x = ev.target.closest("[data-lalpha]"); const t = cur(); if (!x || !isLounge(t)) return;
   const m = t.members[+x.dataset.lalpha]; if (!m) return;
   const a = Math.abs(parseFloat(x.value));
@@ -1466,7 +1498,7 @@ $("lounge-bar").addEventListener("change", (ev) => {
   x.blur(); m.alpha = a; save();
   sysTo(t, `${memberAlpha(m)}\n(takes effect on their next turn in the lounge)`); renderTabs(); renderHeader();
 });
-$("lounge-bar").addEventListener("keydown", (ev) => { if (ev.key === "Enter" && ev.target.matches("[data-lalpha]")) { ev.preventDefault(); ev.target.dispatchEvent(new Event("change", { bubbles: true })); } });
+$("lounge-panel").addEventListener("keydown", (ev) => { if (ev.key === "Enter" && ev.target.matches("[data-lalpha]")) { ev.preventDefault(); ev.target.dispatchEvent(new Event("change", { bubbles: true })); } });
 
 // ---------------------------------------------------------------- F00010: rename a tab
 function renameTab(t, label) {

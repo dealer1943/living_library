@@ -10,7 +10,7 @@
 | Class | ux / persona |
 | Lineage | Owner brief 2026-10-29: a special room where everyone who has been checked in chats together; on/off, reset, archive; mute; per-voice α "when someone repeats themselves"; keep the α a tab had at check-in |
 | Depends on | F00003, F00004, F00005, F00013 |
-| Components | `static/index.html` (`getLounge`, `shelfVoices`, `syncLounge`, `loungeCmd`, `renderLoungeBar`, `personaBody`, `sendPersona`, `doCheckin`, `renderTabs`); reuses `POST /api/persona/stream` (`mode: group`) — no server change |
+| Components | `static/index.html` (`getLounge`, `shelfVoices`, `syncLounge`, `loungeCmd`, `renderLoungeBar` (renders the `#lounge-panel` voices panel), `personaBody`, `sendPersona`, `doCheckin`, `renderTabs`); reuses `POST /api/persona/stream` (`mode: group`) — no server change |
 
 ## Summary
 A **Lounge** tab (sidebar, under the Desk) where every voice on the shelf (`tabs.shelf`, everyone checked in)
@@ -49,8 +49,14 @@ meeting each other. Steered voices loop at high α, so lowering one voice's α (
 ## UX spec
 - Sidebar: **Lounge** section under Desk — the tab row (⏸/▶ power button on hover), or a dashed
   "☕ Open the lounge · N on the shelf" / "↺ Reopen the lounge · N msgs archived" button.
-- In the Lounge, a bar above the composer: ● on / ○ off, one chip per voice (its color, name, **α** number box —
-  Enter or blur applies, **mute/unmute** button), then ⏸ Turn off / ▶ Turn on · ⟳ Sync · Reset (confirms) · Archive.
+- In the Lounge, a **Voices panel to the right of the chat** (`<aside id="lounge-panel">`, a sibling of `#stage`;
+  only shown on the Lounge tab). Sticky header: ● on / ○ off · "Voices · N (M muted)" · **›** collapse button, then
+  ⏸ Off / ▶ On · ⟳ Sync · Reset (confirms) · Archive. Below it a scrollable list, one row per voice (its color, name,
+  **α** number box — Enter or blur applies, **mute/unmute** button). The list keeps its scroll position across re-renders.
+- **Collapse**: › folds the panel to a 38px strip (‹, on/off dot, voice count, vertical "VOICES"); click anywhere on
+  the strip to reopen. The choice is stored on the lounge tab (`panelCollapsed`) in `librarian-chat-v2`, so it
+  survives reloads, archive and reopen. Under 760px wide the open panel overlays from the right.
+  (Replaces the old chip bar above the composer, which ate vertical space with many voices.)
 - Header subtitle: `lounge on · 3 voices (1 muted)`; the composer placeholder lists who will answer.
 - Commands: `/lounge` (= on/open/reopen) · `/lounge off` · `/lounge reset` · `/lounge archive` · `/lounge sync` ·
   `/lounge status` · `/mute NAME` · `/unmute NAME|all` (work from any tab) · `/alpha NAME X` in the Lounge
@@ -76,3 +82,8 @@ meeting each other. Steered voices loop at high α, so lowering one voice's α (
   regression, 0 page errors. Awaiting owner verification on the real model.
 - 2026-10-29 08:35 — re-checkout now restores last check-in α (owner: emily came back at 1.0 after check-in at 0.7).
 - 2026-10-29 08:38 — Verified by owner on the real model.
+- 2026-10-29 08:55 — UX polish (owner: names + mute controls took too much vertical space): voice chips moved out of
+  the bar above the composer into a collapsible, scrollable Voices panel right of the chat; collapse state persisted.
+  Pre-check: headless Chrome against the running server with a throwaway profile — panel right of `#stage`, 14 rows,
+  chip mute/α, `/mute`, `/alpha`, `/lounge off`, ▶ On, collapse → reload stays collapsed, archive hides it, `/lounge`
+  reopens, strip expands, narrow-width overlay; 0 page errors. Still Verified (polish); awaiting owner look.
