@@ -243,6 +243,7 @@ One doc per feature under [`features/`](features/README.md) (verification stamps
 | [F00011](features/F00011_copy_message.md) | Copy button under each bubble | Verified |
 | [F00012](features/F00012_share_as_image.md) | Share selected chats as a PNG card | Verified |
 | [F00013](features/F00013_continue_cut_replies.md) | Continue token-limit / interrupted replies in a new bubble | Verified |
+| [F00014](features/F00014_lounge_mute_alpha.md) | The Lounge: everyone checked in at one table — on/off, reset, archive, mute, per-voice α; α kept on check-in | Verified |
 
 ## Caveats (also from the site)
 

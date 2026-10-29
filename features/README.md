@@ -19,5 +19,6 @@ MVP announcement. "Verified" is stamped `YYYY-MM-DD HH:MM America/New_York` with
 | [F00011](F00011_copy_message.md) | Copy button under each bubble | Verified | 2026-10-28 18:04 |
 | [F00012](F00012_share_as_image.md) | Share selected chats as a PNG card | Verified | 2026-10-28 18:04 |
 | [F00013](F00013_continue_cut_replies.md) | Continue token-limit / interrupted replies in a new bubble | Verified | 2026-10-28 18:04 |
+| [F00014](F00014_lounge_mute_alpha.md) | The Lounge: everyone checked in at one table — on/off, reset, archive, mute, per-voice α; α kept on check-in | Verified | 2026-10-29 08:38 |
 
-Implementation order: 1 → 2 → 7/6/9 → 3 → 4 → 5 → 8 → 10 → 11 → 12 → 13. F00006/F00007 are deferred past the MVP (kept as future test cases).
+Implementation order: 1 → 2 → 7/6/9 → 3 → 4 → 5 → 8 → 10 → 11 → 12 → 13 → 14. F00006/F00007 are deferred past the MVP (kept as future test cases).
