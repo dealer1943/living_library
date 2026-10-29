@@ -122,6 +122,20 @@ def build_parser() -> argparse.ArgumentParser:
         sv.add_argument("--no-model", action="store_true",
                         help="don't load the model: catalogue endpoints only (chat returns 503)")
         sv.add_argument("--log-level", default="warning", help="uvicorn log level (default warning)")
+        sv.add_argument("--about-model", choices=["qwen3-8b", "bonsai-27b"], default="qwen3-8b",
+                        help="default teacher in the About room (F00015): the 8B lab model with her voice "
+                             "(default), or Ternary Bonsai 2 27B via llama-server (chat-only, unsteered)")
+        sv.add_argument("--bonsai-url", default=None,
+                        help="llama-server serving Bonsai 27B (default http://127.0.0.1:8080)")
+        sv.add_argument("--bonsai-dir", default=None,
+                        help="Bonsai-demo checkout used to start llama-server on demand "
+                             "(default ~/Source/repos/Ternary/Bonsai-demo)")
+        sv.add_argument("--primer", default=None, help="teaching primer for the About room (default docs/neuron_primer.md)")
+        sv.add_argument("--about-alpha", type=float, default=0.2,
+                        help="her push (L9 N367 down) while teaching in the About room on the 8B "
+                             "(default 0.2: lighter than the desk's 0.4, which garbled facts in testing; "
+                             "0 = plain Qwen3-8B)")
+        sv.add_argument("--about-max-tokens", type=int, default=600, help="About room reply limit (default 600)")
         _add_common(sv)
         sv.set_defaults(backend="mlx", max_new_tokens=400)
 

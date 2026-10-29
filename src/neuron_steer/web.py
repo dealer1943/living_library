@@ -15,6 +15,9 @@ A small FastAPI app serving one static chat page plus a JSON API:
 * ``GET  /api/inventory``, ``/api/find?q=``, ``/api/open?layer=&neuron=``, ``/api/recent?k=``
   catalogue reads straight from SQLite (no model needed)
 * ``GET  /api/health``       model loaded? which steers?
+* ``POST /api/about/stream``  F00015 About room: {message, history?, model?: qwen3-8b|bonsai-27b,
+                             continue_text?} -> the librarian teaching from docs/neuron_primer.md (SSE)
+* ``GET  /api/models``, ``POST /api/models/start|stop`` {id}  teachers for the About room
 
 The model loads once, on a single dedicated worker thread, and every generation runs on
 that same thread: MLX streams are per-thread and the steering hooks mutate the model, so
@@ -38,6 +41,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
+from . import about as about_mod
 from .library import DEFAULT_DB, LIBRARIAN, Entry, Library
 from .librarian import _ALPHA_FLAG, LibrarianSession, _parse_dir, _parse_target, _split_prompt
 from .personas import keyword_request, normalize_keywords, persona_messages, is_echo, pick_keywords, strip_speaker, trim_repeats
@@ -156,6 +160,12 @@ class LibrarianServer:
     def __init__(self, args: argparse.Namespace, load_model: bool = True):
         self.args = args
         self.pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="librarian-model")
+        # F00015: the 27B teacher is an HTTP call to llama-server, so it never queues behind the 8B
+        self.http_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="about-http")
+        self.bonsai = about_mod.Bonsai(getattr(args, "bonsai_url", None) or about_mod.DEFAULT_BONSAI_URL,
+                                       getattr(args, "bonsai_dir", None))
+        self._cards: list | None = None
+        self._cards_mtime = 0.0
         self.base: LibrarianSession | None = None
         self.sessions: OrderedDict[str, LibrarianSession] = OrderedDict()
         self.ready = threading.Event()
@@ -218,6 +228,89 @@ class LibrarianServer:
                 "stopped_on_repeat": res.stopped_on_repeat, "turns": len(s.history) // 2,
                 "steers": [_steer(x) for x in s.steers],
                 "applied": [str(a) for a in res.applied]}
+
+    # -- F00015: the About room ------------------------------------------------------------
+
+    def cards(self) -> list:
+        """Primer cards, re-read when docs/neuron_primer.md changes (edit it without a restart)."""
+        path = Path(getattr(self.args, "primer", None) or about_mod.PRIMER)
+        m = path.stat().st_mtime
+        if self._cards is None or m != self._cards_mtime:
+            self._cards, self._cards_mtime = about_mod.load_cards(path), m
+        return self._cards
+
+    def about_model(self, body: dict) -> str:
+        mid = str(body.get("model") or getattr(self.args, "about_model", None) or about_mod.DEFAULT_ABOUT_MODEL)
+        if mid not in about_mod.MODEL_IDS:
+            raise ValueError(f"unknown model {mid!r}; pick one of {sorted(about_mod.MODEL_IDS)}")
+        return mid
+
+    def about_sync(self, body: dict, on_text=None, on_thought=None) -> dict:
+        """One teaching turn. The system prompt is rebuilt every turn from the primer cards that match
+        this question (and the one before it, for follow-ups like "and down?")."""
+        msg = str(body.get("message") or "").strip()
+        cont = str(body.get("continue_text") or "")
+        history = about_mod.clean_history(body.get("history"))
+        if msg and not cont:
+            history.append({"role": "user", "content": msg})
+        if not history or history[-1]["role"] != "user":
+            raise ValueError("empty message")
+        mid = self.about_model(body)
+        users = [m["content"] for m in history if m["role"] == "user"][-2:]
+        system, picked = about_mod.teach_system(self.cards(), " ".join(users), steered=(mid == "qwen3-8b"))
+        msgs = [{"role": "system", "content": system}, *history]
+        max_new = int(body.get("max_new_tokens") or getattr(self.args, "about_max_tokens", 600))
+        if mid == "bonsai-27b":
+            if cont:
+                msgs.append({"role": "assistant", "content": cont})
+            r = self.bonsai.chat(msgs, on_text=on_text, on_thought=on_thought, max_tokens=max_new,
+                                 thinking=bool(body.get("thinking", False)))
+            reply = r["text"].lstrip() if cont else r["text"].strip()
+            from .prompts import split_thoughts
+            tagged, reply = split_thoughts(reply) if not cont else ("", reply)
+            out = {"reply": reply, "thoughts": "\n\n".join(x for x in (r["thoughts"], tagged) if x.strip()),
+                   "truncated": r["truncated"], "n_tokens": r["n_tokens"]}
+            if cont:
+                body_text = r["text"].lstrip()
+                out.update(reply=body_text.strip(), joiner=r["text"][:len(r["text"]) - len(body_text)],
+                           continued=True, thoughts="")
+            return {**out, "model": mid, "cards": picked, "steers": []}
+        if self.base is None:
+            raise RuntimeError(self.error or "model not loaded")
+        s = self.base
+        voice = s.default_voice
+        va = body.get("voice_alpha", getattr(self.args, "about_alpha", None))   # her push while teaching
+        if va is not None:
+            voice = Steer(voice.layer, voice.neuron, -abs(float(va)))
+        steers = [voice] if voice.alpha else []   # voice_alpha 0 = plain Qwen3-8B
+        if cont:
+            res = s.generate(msgs, steers, max_new_tokens=max_new, on_text=on_text, assistant_prefix=cont)
+            return {**_continuation(res), "model": mid, "cards": picked, "steers": [_steer(x) for x in steers]}
+        from .librarian import _separate
+        res = _separate(s.generate(msgs, steers, max_new_tokens=max_new,
+                                   think_budget=int(getattr(self.args, "think_budget", 0) or 0),
+                                   on_text=on_text, on_thought=on_thought))
+        spill, reply = split_live(res.text)
+        thoughts = "\n\n".join(x for x in (res.thoughts, spill) if x.strip())
+        reply = trim_repeats(reply).strip()
+        return {"reply": reply or "(only thoughts this turn — open Thoughts above, or ask again.)", "no_reply": not reply,
+                "thoughts": thoughts, "truncated": bool(reply) and res.truncated, "n_tokens": res.n_new_tokens,
+                "stopped_on_repeat": res.stopped_on_repeat, "model": mid, "cards": picked,
+                "steers": [_steer(x) for x in steers]}
+
+    def models_info(self) -> dict:
+        b = self.bonsai.status()
+        out = []
+        for m in about_mod.MODELS:
+            d = dict(m)
+            if m["id"] == "qwen3-8b":
+                d.update(lab_model=self.args.model, ready=self.ready.is_set(), error=self.error, state=(
+                    "ok" if self.ready.is_set() else ("error" if self.error else "loading")))
+            else:
+                d.update(ready=b["state"] == "ok", **b)
+            out.append(d)
+        return {"lab_model": self.args.model, "about_default": getattr(self.args, "about_model", None)
+                or about_mod.DEFAULT_ABOUT_MODEL, "models": out}
 
     def reset_sync(self, sid: str | None) -> dict:
         if sid and sid in self.sessions:
@@ -418,7 +511,9 @@ def create_app(args: argparse.Namespace, load_model: bool = True):
                 "extra_steers": [_steer(s) for s in getattr(args, "extra_steers", [])],
                 "probe_alpha": args.alpha, "context": not args.no_context,
                 "think_budget": getattr(args, "think_budget", 0),
-                "catalogue": str(_db_path(args))}
+                "catalogue": str(_db_path(args)),
+                "about": {"default_model": getattr(args, "about_model", None) or about_mod.DEFAULT_ABOUT_MODEL,
+                          "models": [m["id"] for m in about_mod.MODELS]}}
 
     @app.post("/api/chat")
     async def chat(body: dict = Body(...)):
@@ -428,6 +523,37 @@ def create_app(args: argparse.Namespace, load_model: bool = True):
     async def chat_stream(body: dict = Body(...)):
         return sse(lambda on_text, on_thought: srv.chat_sync(body, on_text=on_text, on_thought=on_thought),
                    raw_reply=bool(body.get("continue_text")))
+
+    @app.post("/api/about/stream")
+    async def about_stream(body: dict = Body(...)):
+        """F00015: the About room — the librarian teaches from docs/neuron_primer.md."""
+        try:
+            mid = srv.about_model(body)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        cont = bool(body.get("continue_text"))
+        if mid == "bonsai-27b":   # plain HTTP to llama-server: its own pool, its own reply cleaning
+            return sse(lambda on_text, on_thought: srv.about_sync(body, on_text=on_text, on_thought=on_thought),
+                       raw_reply=True, pool=srv.http_pool)
+        return sse(lambda on_text, on_thought: srv.about_sync(body, on_text=on_text, on_thought=on_thought),
+                   raw_reply=cont)
+
+    @app.get("/api/models")
+    async def models():
+        return await asyncio.to_thread(srv.models_info)
+
+    @app.post("/api/models/start")
+    async def models_start(body: dict = Body(default={})):
+        if str(body.get("id") or "bonsai-27b") != "bonsai-27b":
+            raise HTTPException(400, "only bonsai-27b is started on demand (the 8B lab loads with the server)")
+        try:
+            return await asyncio.to_thread(srv.bonsai.start)
+        except RuntimeError as e:
+            raise HTTPException(503, str(e))
+
+    @app.post("/api/models/stop")
+    async def models_stop(body: dict = Body(default={})):
+        return await asyncio.to_thread(srv.bonsai.stop)
 
     @app.post("/api/persona/stream")
     async def persona_stream(body: dict = Body(...)):
@@ -447,7 +573,7 @@ def create_app(args: argparse.Namespace, load_model: bool = True):
         finally:
             lib.close()
 
-    def sse(work, raw_reply: bool = False):
+    def sse(work, raw_reply: bool = False, pool=None):
         loop = asyncio.get_running_loop()
         q: asyncio.Queue = asyncio.Queue()
 
@@ -476,10 +602,10 @@ def create_app(args: argparse.Namespace, load_model: bool = True):
             except Exception as e:  # noqa: BLE001 - reported to the client
                 loop.call_soon_threadsafe(q.put_nowait, {"type": "error", "error": str(e)})
 
-        srv.pool.submit(job)
+        (pool or srv.pool).submit(job)
 
         async def events():
-            yield f"data: {json.dumps({'type': 'queued', 'ready': srv.ready.is_set()})}\n\n"
+            yield f"data: {json.dumps({'type': 'queued', 'ready': srv.ready.is_set() or pool is not None})}\n\n"
             while True:
                 ev = await q.get()
                 yield f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
@@ -577,6 +703,8 @@ def run_server(args: argparse.Namespace) -> int:
     print(f"\n  Librarian of Alexandria — web chat\n  open {url}\n"
           f"  her voice: L{LIBRARIAN[0]} N{LIBRARIAN[1]} {LIBRARIAN[2]}  α={-abs(args.librarian_alpha):+g}  "
           f"model={args.model}\n"
+          f"  About room teacher: {getattr(args, 'about_model', None) or about_mod.DEFAULT_ABOUT_MODEL} "
+          f"(Bonsai 27B via {getattr(args, 'bonsai_url', None) or about_mod.DEFAULT_BONSAI_URL})\n"
           + ("  (loading the model in the background; the page shows when she is ready)\n" if not args.no_model
              else "  (--no-model: catalogue endpoints only)\n"), flush=True)
     uvicorn.run(app, host=args.host, port=args.port, log_level=args.log_level)

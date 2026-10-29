@@ -304,6 +304,19 @@ try { document.documentElement.dataset.skin = (JSON.parse(localStorage.getItem("
   .av.lounge-av { background: var(--accent); color: var(--accent-ink); }
   .tab.lounge-off .nm { opacity: .6; }
   #log[data-kind="lounge"] .empty { margin-top: 9vh; }
+  /* F00015: the About room */
+  #about-btn.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  #log[data-kind="about"] .empty { margin-top: 6vh; }
+  .about-empty p { max-width: 620px; margin-left: auto; margin-right: auto; }
+  .about-empty .starters { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 18px auto; max-width: 640px; }
+  .about-empty .starters button { font: 14px var(--sans); border-radius: 16px; padding: 6px 14px; }
+  .about-empty .credit { font-size: 13px; }
+  .about-empty a, .s-note a { color: var(--accent); }
+  .teacher { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .teacher .seg { display: inline-flex; } .teacher .seg button { flex: none; padding: 2px 10px; font: 12px var(--mono); }
+  .teacher .mstate { font-size: 12px; } .teacher .mstate.bad { color: var(--err); }
+  .teacher button.mini { padding: 2px 8px; font-size: 12px; }
+  .av.about-av { background: var(--accent); color: var(--accent-ink); }
 </style>
 </head>
 <body>
@@ -319,6 +332,7 @@ try { document.documentElement.dataset.skin = (JSON.parse(localStorage.getItem("
   <button id="share-btn" title="Share messages as an image (/share)">Share</button>
   <button id="newchat" title="Forget this conversation">New chat</button>
   <button id="gear" class="icon" title="Settings (/settings)" aria-label="Settings" aria-controls="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
+  <button id="about-btn" title="About the Library — learn how neurons, layers and α work (/about)" aria-pressed="false">About</button>
 </header>
 <div id="backdrop" hidden></div>
 <aside id="settings" aria-label="Settings" aria-hidden="true">
@@ -336,6 +350,12 @@ try { document.documentElement.dataset.skin = (JSON.parse(localStorage.getItem("
     <div class="s-actions"><button class="primary" id="s-apply">Make librarian</button><button id="s-default">Restore default</button></div>
     <div class="s-err" id="s-err"></div>
     <p class="s-note">Default: L9 N367 down, α −0.4 — the Librarian of Alexandria. Also <span data-hl>/librarian 12:545:up --alpha 0.5</span> · <span data-hl>/librarian default</span></p>
+  </section>
+  <section id="s-models">
+    <h3>Models</h3>
+    <div class="teacher" id="s-teacher"></div>
+    <p class="s-note">The lab (probes, personas, the Librarian's voice) always runs on <b>Qwen3-8B</b> — the neurons have to be reachable to push them.
+      The <b>About</b> room can be taught by Qwen3-8B (default) or <b>Ternary Bonsai 2 27B</b> via llama.cpp: chat-only, not steered.</p>
   </section>
   <section id="s-export">
     <h3>Export</h3>
@@ -414,7 +434,8 @@ const COMMANDS = [
   { name: "share", args: "[all | last N]", desc: "export messages as a PNG card for social — pick them, or all / the last N", aliases: ["image"] },
   { name: "tabs", args: "", desc: "who is checked out, and the last check-ins" },
   { name: "export", args: "neurons | chats [md]", desc: "download the active neurons + α (JSON), or every chat (JSON or Markdown)" },
-  { name: "settings", args: "", desc: "open settings (librarian, skins, export)" },
+  { name: "settings", args: "", desc: "open settings (librarian, models, skins, export)" },
+  { name: "about", args: "[8b | 27b]", desc: "the About room: the Librarian teaches layers, neurons, α from ground zero (optionally pick the teacher model)", aliases: ["learn"] },
   { name: "skin", args: "[alexandria|parchment|midnight|terminal|marble]", desc: "change the look of the Library", aliases: ["theme"] },
   { name: "reset", args: "", desc: "clear this tab's conversation (the catalogue stays)" },
 ];
@@ -503,11 +524,13 @@ function loadTabs() {
 let tabs = loadTabs();
 const tab = (id) => tabs.tabs.find(t => t.id === (id ?? tabs.active));
 const cur = () => tab();
-const isPersona = (t) => t && t.kind !== "librarian";
+const ABOUT_ID = "about";
+const isAbout = (t) => !!t && t.kind === "about";         // F00015: the About room (a desk-like chat, not a persona)
+const isPersona = (t) => t && t.kind !== "librarian" && t.kind !== "about";
 const isLounge = (t) => !!t && t.kind === "lounge";      // F00014: the Lounge (persona-like, but never checked out / in)
 const isOut = (t) => isPersona(t) && !isLounge(t);         // a checked-out persona tab
 // F00010: a tab's display label (/name) — the persona's own name (sent to the model) never changes
-const baseName = (t) => isPersona(t) ? t.name : librarianWho();
+const baseName = (t) => isPersona(t) ? t.name : isAbout(t) ? "About" : librarianWho();
 const dispName = (t) => (t && t.label) || baseName(t);
 const save = () => { try { localStorage.setItem(TABS_KEY, JSON.stringify(tabs)); } catch (e) {} };
 const busyTabs = new Set(), lives = new Map();   // tab id -> the reply being streamed into it (survives tab switches)
@@ -521,6 +544,7 @@ const memberAlpha = (m) => String(m.name || "").startsWith(`L${m.layer} N${m.neu
   ? memberLabel(m) : `${m.name} (${memberLabel(m)})`;
 function avatarHTML(t, cls) {   // a tab's avatar: the Librarian, one persona, a blend (split), or a group (stack)
   cls = cls || "av";
+  if (isAbout(t)) return `<span class="${cls} about-av">?</span>`;
   if (!isPersona(t)) return `<span class="${cls} lib">L</span>`;
   if (isLounge(t) && !t.members.length) return `<span class="${cls} lounge-av">☕</span>`;
   if (isLounge(t)) return `<span class="${cls} stack">${t.members.slice(0, 3).map((m, i) => `<i style="background:${palVar(i)}">${esc(initial(m.name))}</i>`).join("")}</span>`;
@@ -606,6 +630,7 @@ function append(t, m) {   // store a message in tab t; draw it if t is on screen
 }
 
 function emptyState(t) {
+  if (isAbout(t)) return aboutEmpty();
   if (!isPersona(t)) return `<div class="empty"><h2>Welcome to the Library.</h2>
       <p>The chief librarian keeps the catalogue of neuron personas.<br>Ask her anything — or press <b>/</b> and try ${highlight("/find coffee", true)}, ${highlight("/inventory", true)}, ${highlight("/probe 12:545:up --alpha 0.5", true)}.</p>
       <p>Check one out to talk with it in its own tab: ${highlight("/checkout emily", true)} · ${highlight("/checkout emily + smallpox", true)} · ${highlight("/checkout emily + smallpox --mix", true)}</p></div>`;
@@ -658,7 +683,11 @@ let serverInfo = null;
 function renderHeader() {
   const v = voice(), h = serverInfo, t = cur(), model = h ? h.model : "Qwen3-8B";
   const editing = $("title").querySelector(".rename-in");   // F00010: keep an inline rename alive
-  if (isPersona(t)) {
+  if (isAbout(t)) {   // F00015
+    if (!editing) $("title").textContent = t.label || "About the Library";
+    $("steer").innerHTML = teacherHTML("h");
+    input.placeholder = "Ask how it works — layers, neurons, α, up vs down…   ( / for commands )";
+  } else if (isPersona(t)) {
     if (!editing) $("title").textContent = dispName(t);
     $("steer").innerHTML = `${esc(model)} · ${t.kind === "group" ? `group of ${t.members.length} · ` : t.kind === "mix" ? "mix · " : ""}` +
       t.members.map(m => esc(memberLabel(m))).join(" + ");
@@ -680,8 +709,10 @@ function renderHeader() {
   $("checkin-btn").hidden = !isOut(t);
   renderLoungeBar();
   $("newchat").textContent = isPersona(t) ? "Clear" : "New chat";
+  $("about-btn").classList.toggle("on", isAbout(t)); $("about-btn").setAttribute("aria-pressed", String(isAbout(t)));
+  $("about-btn").textContent = isAbout(t) ? "← Back" : "About";
   $("newchat").title = isPersona(t) ? "Clear this tab's conversation (stays checked out)" : "Forget this conversation";
-  document.title = isPersona(t) || t.label ? `${dispName(t)} · Living Library` : "The Librarian of Alexandria";
+  document.title = isAbout(t) ? "About · Living Library" : isPersona(t) || t.label ? `${dispName(t)} · Living Library` : "The Librarian of Alexandria";
   $("title").title = "Rename this chat (click, or /name LABEL)";
   renderOnDuty();
   syncHL();
@@ -825,13 +856,15 @@ async function continueFrom(t, last, auto) {
     const L = startLive(t, who, persona ? (mi ?? 0) : undefined);
     L.meta = "continuing…"; L.cont = true; drawLive(L);
     const si = isLounge(t) ? Math.max(0, t.members.findIndex(x => x.name === who)) : t.kind === "group" ? (mi ?? 0) : null;
+    const about = isAbout(t);
     const body = persona
       ? { ...personaBody(t, si, transcriptOf({ ...t, messages: before })), continue_text: prefix }
+      : about ? { continue_text: prefix, model: last.model || aboutModel(), history: mergedTurns(before).map(x => ({ role: x.role, content: x.content })) }
       : { continue_text: prefix, session_id: t.session_id, history: mergedTurns(before).map(x => ({ role: x.role, content: x.content })), voice: voiceBody() };
     try {
-      const { done, secs } = await stream(persona ? "/api/persona/stream" : "/api/chat/stream", body, L);
+      const { done, secs } = await stream(persona ? "/api/persona/stream" : about ? "/api/about/stream" : "/api/chat/stream", body, L);
       if (!done.reply) { endLive(L); break; }
-      const m = finishMsg(done, secs, { who, ...(mi != null ? { mi } : {}) });
+      const m = finishMsg(done, secs, { who, ...(mi != null ? { mi } : {}), ...(about ? { model: last.model || aboutModel() } : {}) });
       endLive(L, m); last = m;
     } catch (e) {
       if (L.text) endLive(L, keepPartial(L)); else { endLive(L); last.interrupted = true; save(); }
@@ -976,6 +1009,7 @@ async function command(line) {
                          : `Unmuted ${ms.map(m => m.name).join(", ")} — back at the table.`);
     } else if (cmd === "alpha") {
       const m = rest.match(/^(.*?)\s*(?:(?:--alpha|-a|alpha|\u03b1)\s*=?\s*)?([+-]?(?:\d+(?:\.\d*)?|\.\d+))$/i);
+      if (isAbout(T)) { sys("Nothing is pushed in the About room — α lives at the desk and in persona tabs (/alpha 0.75 there). Ask me what α does, though!"); return; }
       if (!isPersona(T)) {   // from the desk: apply to the checked-out tab it clearly means, or say how
         if (!m) { sys(alphaOverview() + "\n\nusage here: /alpha X (the one checked-out persona) · /alpha NAME X · /alpha librarian X (my own voice)"); return; }
         sys(deskAlpha(m[1].trim(), parseFloat(m[2]), "cmd").text); return;
@@ -1012,6 +1046,11 @@ async function command(line) {
       else throw new Error("usage: /export neurons  ·  /export chats  ·  /export chats md   (also Settings → Export)");
     } else if (cmd === "settings") {
       openSettings();
+    } else if (cmd === "about" || cmd === "learn") {   // F00015
+      const mm = rest.match(/^(?:model\s+)?(8b|qwen3?-?8b|27b|bonsai(?:-?27b)?)$/i);
+      if (mm) { setAboutModel(/27/.test(mm[1]) || /bonsai/i.test(mm[1]) ? "bonsai-27b" : "qwen3-8b"); }
+      openAbout(true);
+      if (mm) sysTo(tab(ABOUT_ID), `Teacher: ${ABOUT_MODELS[aboutModel()].label} — ${ABOUT_MODELS[aboutModel()].sub}.`);
     } else if (cmd === "skin" || cmd === "theme") {
       if (!rest) sys("skins: " + SKINS.map(k => (k.id === prefs.skin ? "▸ " : "") + k.id).join(" · "));
       else { applySkin(rest.toLowerCase()); sys(`skin: ${rest.toLowerCase()}`); }
@@ -1054,7 +1093,7 @@ async function openSettings() {
   const v = voice();
   $("s-L").value = v.layer; $("s-N").value = v.neuron; $("s-A").value = v.alpha; $("s-name").value = ""; setDirBtn(v.direction);
   $("s-A").dataset.touched = "";
-  $("s-err").textContent = ""; renderOnDuty(); renderSkins(); renderExportSummary();
+  $("s-err").textContent = ""; renderOnDuty(); renderSkins(); renderExportSummary(); renderTeacher(); refreshModels();
   drawer.classList.add("open"); drawer.setAttribute("aria-hidden", "false"); backdrop.hidden = false;
   setTimeout(() => $("s-close").focus(), 50);
   try {   // filed persona names for the picker
@@ -1167,13 +1206,14 @@ $("form").addEventListener("submit", async (ev) => {
   input.value = ""; autosize(); remember(text); closeMenu(); renderArgHint();
   setBusy(t, true);
   if (text.startsWith("/")) append(t, { role: "user", content: text, cmd: true });   // shown on the right, kept out of chat history
-  try { text.startsWith("/") ? await command(text) : isPersona(t) ? await sendPersona(text, t) : deskAlphaChat(text, t) || await sendChat(text, t); }
+  try { text.startsWith("/") ? await command(text) : isPersona(t) ? await sendPersona(text, t) : isAbout(t) ? await sendAbout(text, t) : deskAlphaChat(text, t) || await sendChat(text, t); }
   finally { if (tab(t.id)) setBusy(t, false); else { busyTabs.delete(t.id); sendBtn.disabled = busyTabs.has(cur().id); } if (t.id === tabs.active) input.focus(); }
 });
 
 // ---------------------------------------------------------------- F00004: the side tabs
 const nav = $("tabs");
 function tabSub(t) {
+  if (isAbout(t)) return `learn · ${ABOUT_MODELS[aboutModel()].label}`;
   if (!isPersona(t)) return prefs.voice ? voiceLabel(voice()) : "the catalogue desk";
   if (isLounge(t)) { const mu = t.members.filter(m => m.muted).length;
     return `${t.on === false ? "off" : "on"} · ${t.members.length} voice${t.members.length === 1 ? "" : "s"}${mu ? ` · ${mu} muted` : ""}`; }
@@ -1189,9 +1229,9 @@ function renderTabs() {
     `<button class="ren" data-rename="${esc(t.id)}" title="Rename (/name)" aria-label="Rename ${esc(dispName(t))}">✎</button>` +
     `${isOut(t) ? `<button class="x" data-checkin="${esc(t.id)}" title="Check in ${esc(t.name)}" aria-label="Check in ${esc(t.name)}">↩</button>` : ""}` +
     `${isLounge(t) ? `<button class="x" data-lpower="1" title="${t.on === false ? "Turn the lounge on" : "Turn the lounge off (pause)"}" aria-label="${t.on === false ? "Turn the lounge on" : "Turn the lounge off"}">${t.on === false ? "▶" : "⏸"}</button>` : ""}</div>`;
-  const lib = tabs.tabs[0], lounge = tabs.tabs.find(isLounge), out = tabs.tabs.filter(t => t !== lib && t !== lounge), ix = (t) => tabs.tabs.indexOf(t);
+  const lib = tabs.tabs[0], lounge = tabs.tabs.find(isLounge), about = tabs.tabs.find(isAbout), out = tabs.tabs.filter(t => t !== lib && t !== lounge && t !== about), ix = (t) => tabs.tabs.indexOf(t);
   const nShelf = tabs.shelf.length ? shelfVoices().length : 0;
-  nav.innerHTML = `<div class="tabs-h">Desk</div>${row(lib, 0)}` +
+  nav.innerHTML = `<div class="tabs-h">Desk</div>${row(lib, 0)}${about ? row(about, ix(about)) : ""}` +
     `<div class="tabs-h">Lounge${lounge ? ` <span class="n">${lounge.members.length}</span>` : ""}</div>` +
     (lounge ? row(lounge, ix(lounge)) : `<button class="add" id="open-lounge" type="button" title="Everyone checked in, at one table (/lounge)">` +
       (tabs.loungeArchive ? `↺ Reopen the lounge · ${tabs.loungeArchive.messages.length} msg${tabs.loungeArchive.messages.length === 1 ? "" : "s"} archived` : `☕ Open the lounge${nShelf ? ` · ${nShelf} on the shelf` : ""}`) + `</button>`) +
@@ -1698,7 +1738,7 @@ function shareCanvas(t, msgs, opt) {
   const blocks = [];   // {h, draw(y)}
   const persona = isPersona(t);
   // header
-  const sub = opt.neurons ? (persona ? t.members.map(memberLabel).join(" + ") : voiceLabel(voice())) : (persona ? (isLounge(t) ? "the lounge" : t.kind === "group" ? "group chat" : t.kind === "mix" ? "one blended voice" : "a neuron persona") : "the catalogue desk");
+  const sub = opt.neurons ? (persona ? t.members.map(memberLabel).join(" + ") : voiceLabel(voice())) : (persona ? (isLounge(t) ? "the lounge" : t.kind === "group" ? "group chat" : t.kind === "mix" ? "one blended voice" : "a neuron persona") : isAbout(t) ? "the About room" : "the catalogue desk");
   ctx.font = `13px ${MONO}`; const subLines = wrapLines(ctx, sub, CW - 60).slice(0, 3);
   blocks.push({ h: 64 + subLines.length * 18, draw(y) {
     const cx = PAD + 22, cy = y + 30;
@@ -1706,7 +1746,7 @@ function shareCanvas(t, msgs, opt) {
     ctx.fillStyle = persona ? C.bg : C.accentInk; ctx.font = `600 21px ${SERIF}`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
     ctx.fillText(persona ? initial(dispName(t)) : "L", cx, cy + 1); ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
     ctx.fillStyle = C.ink; ctx.font = `600 22px ${SERIF}`;
-    const title = wrapLines(ctx, persona ? dispName(t) : (t.label || (prefs.voice ? `The Librarian · ${voice().name}` : "The Librarian of Alexandria")), CW - 60)[0];
+    const title = wrapLines(ctx, persona ? dispName(t) : isAbout(t) ? (t.label || "About the Library") : (t.label || (prefs.voice ? `The Librarian · ${voice().name}` : "The Librarian of Alexandria")), CW - 60)[0];
     ctx.fillText(title, PAD + 58, y + 27);
     ctx.fillStyle = C.muted; ctx.font = `13px ${MONO}`; subLines.forEach((l, i) => ctx.fillText(l, PAD + 58, y + 48 + i * 18));
     ctx.strokeStyle = C.line; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(PAD, y + 60 + subLines.length * 18); ctx.lineTo(W - PAD, y + 60 + subLines.length * 18); ctx.stroke();
@@ -1923,6 +1963,106 @@ input.addEventListener("input", autosize);
 input.addEventListener("scroll", () => { hl.scrollTop = input.scrollTop; });
 document.querySelectorAll("[data-hl]").forEach(el => { el.innerHTML = highlight(el.textContent, false); });
 $("newchat").addEventListener("click", () => { if (!busyTabs.has(cur().id)) resetChat(); });
+
+// ---------------------------------------------------------------- F00015: the About room
+// A fixed tab (id "about", kind "about") where the chief librarian teaches the neuron process from ground
+// zero, grounded in docs/neuron_primer.md (the server picks the matching primer cards each turn). The teacher
+// is Qwen3-8B with her voice (default) or Ternary Bonsai 2 27B via llama-server (chat-only, never steered).
+const ABOUT_MODELS = {
+  "qwen3-8b":   { label: "Qwen3-8B",   sub: "the lab model · her voice, L9 N367 down · thinks first" },
+  "bonsai-27b": { label: "Bonsai 27B", sub: "Ternary Bonsai 2 27B via llama.cpp · chat-only, not steered" },
+};
+let models = null, prevTab = null, modelPoll = null;
+const aboutModel = () => ABOUT_MODELS[prefs.aboutModel] ? prefs.aboutModel
+  : (serverInfo && serverInfo.about && serverInfo.about.default_model) || "qwen3-8b";
+const aboutWho = (m) => m === "bonsai-27b" ? "Librarian · Bonsai 27B" : "Librarian";
+const modelInfo = (id) => models && models.models.find(x => x.id === id);
+function setAboutModel(id) {
+  if (!ABOUT_MODELS[id]) return;
+  prefs.aboutModel = id; savePrefs();
+  renderHeader(); renderTeacher(); renderTabs();
+  const et = log.querySelector(".about-empty .teacher"); if (et) et.outerHTML = teacherHTML("e");
+  refreshModels();
+}
+function mstate(id) {
+  const m = modelInfo(id);
+  if (!m) return ["", ""];
+  if (id === "qwen3-8b") return m.ready ? ["ready", ""] : m.error ? ["unavailable", "bad"] : ["loading…", ""];
+  if (!m.installed) return ["not installed", "bad"];
+  return m.state === "ok" ? ["running", ""] : m.state === "loading" ? ["starting… (loading ~7 GB)", ""] : ["stopped", "bad"];
+}
+function teacherHTML(where) {
+  const cur_ = aboutModel(), [st, cls] = mstate(cur_), m = modelInfo("bonsai-27b");
+  const seg = Object.entries(ABOUT_MODELS).map(([id, x]) =>
+    `<button type="button" data-amodel="${id}" class="${id === cur_ ? "on" : ""}" title="${esc(x.sub)}">${esc(x.label)}${id === "qwen3-8b" ? " · default" : ""}</button>`).join("");
+  let act = "";
+  if (cur_ === "bonsai-27b" && m && m.installed) act = m.state === "down" ? `<button type="button" class="mini" data-bonsai="start">Start 27B</button>`
+    : m.started_here ? `<button type="button" class="mini" data-bonsai="stop">Stop 27B</button>` : "";
+  return `<span class="teacher">${where === "h" ? "Teacher " : ""}<span class="seg">${seg}</span>` +
+    `<span class="mstate ${cls}">${esc(st)}</span>${act}</span>`;
+}
+function renderTeacher() { const el = $("s-teacher"); if (el) el.innerHTML = teacherHTML("s"); }
+async function refreshModels() {
+  try { models = await (await fetch("/api/models", { cache: "no-store" })).json(); } catch (e) { return; }
+  if (isAbout(cur())) renderHeader();
+  const et = log.querySelector(".about-empty .teacher"); if (et) et.outerHTML = teacherHTML("e");
+  renderTeacher(); renderTabs();
+  const b = modelInfo("bonsai-27b");
+  clearTimeout(modelPoll);
+  if (b && b.state === "loading") modelPoll = setTimeout(refreshModels, 3000);
+}
+async function bonsaiAction(what) {
+  try {
+    const r = await fetch(`/api/models/${what}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: "bonsai-27b" }) });
+    if (!r.ok) throw new Error(await r.text());
+    if (what === "start") sysTo(tab(ABOUT_ID) || cur(), "Starting Bonsai 27B (llama-server, 16k context). The first load reads ~7 GB — about a minute. You can keep chatting with the 8B meanwhile.");
+  } catch (e) { errTo(tab(ABOUT_ID) || cur(), e); }
+  refreshModels();
+}
+document.addEventListener("click", (ev) => {
+  const a = ev.target.closest("[data-amodel]"); if (a) { ev.preventDefault(); setAboutModel(a.dataset.amodel); return; }
+  const b = ev.target.closest("[data-bonsai]"); if (b) { ev.preventDefault(); bonsaiAction(b.dataset.bonsai); return; }
+  const q = ev.target.closest("[data-ask]");
+  if (q && isAbout(cur()) && !busyTabs.has(ABOUT_ID)) { input.value = q.dataset.ask; autosize(); $("form").requestSubmit(); }
+});
+function openAbout(stay) {
+  let t = tab(ABOUT_ID);
+  if (!t) { t = { id: ABOUT_ID, kind: "about", name: "About", messages: [], created_at: new Date().toISOString() }; tabs.tabs.push(t); save(); }
+  if (tabs.active === ABOUT_ID) { if (!stay) switchTab(prevTab && tab(prevTab) ? prevTab : "librarian"); return; }
+  prevTab = tabs.active; switchTab(ABOUT_ID); refreshModels();
+}
+$("about-btn").addEventListener("click", () => openAbout(false));
+const ABOUT_STARTERS = ["What is this lab, from zero?", "What is a layer?", "What is a neuron?", "What does α (alpha) do?",
+  "Why do up and down give different personas?", "Why ask “Who are you?”", "What α should I use?", "How do I check out a persona?"];
+function aboutEmpty() {
+  return `<div class="empty about-empty"><span class="av big about-av" style="width:64px;height:64px;font-size:28px;display:inline-grid;place-items:center;border-radius:50%">?</span>
+    <h2>How the Library works</h2>
+    <p>Ask the chief librarian anything — from “what is a neuron?” up to the α formula. She teaches from the Library's primer
+       (<code>docs/neuron_primer.md</code>), so answers stay true to this lab's code.</p>
+    <p>${teacherHTML("e")}</p>
+    <div class="starters">${ABOUT_STARTERS.map(q => `<button type="button" data-ask="${esc(q)}">${esc(q)}</button>`).join("")}</div>
+    <p class="credit">Inspired by <a href="https://x.com/jfonsecarivera/status/2115109334090920065" target="_blank" rel="noopener">josh :) (@jfonsecarivera)</a>'s
+       <a href="https://qwen-neurons-site.vercel.app/" target="_blank" rel="noopener">Neuron Persona Library</a> — 34,220 persona neurons in Qwen3-8B.</p></div>`;
+}
+async function sendAbout(text, t) {
+  const history = mergedTurns(t.messages).map(m => ({ role: m.role, content: m.content }));
+  append(t, { role: "user", content: text });
+  const model = aboutModel(), who = aboutWho(model);
+  const L = startLive(t, who);
+  try {
+    const { done, secs } = await stream("/api/about/stream", { message: text, history, model }, L);
+    const msg = finishMsg(done, secs, { who, model });
+    const cards = (done.cards || []).filter(c => !/^Core/.test(c));
+    msg.meta += ` · ${ABOUT_MODELS[model].label}${cards.length ? ` · primer: ${cards.join(", ")}` : ""}`;
+    endLive(L, msg);
+    if (msg.truncated) await continueFrom(t, msg, true);
+  } catch (e) {
+    if (L.text) { endLive(L, keepPartial(L)); errTo(t, e); }
+    else { endLive(L); unsend(t, text, e); }
+    refreshModels();
+  }
+  if (t.id === tabs.active) toBottom();
+}
 
 renderTabs();
 renderAll();

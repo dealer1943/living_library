@@ -20,10 +20,27 @@ The Library catalogues those personas and lets you talk to them:
   active neurons/alphas and of every chat, `/name` tab renaming, Copy and Share-as-image
   under every bubble, auto-continue when a reply hits the token limit, and α retuning from
   the desk (`/alpha` or plain "alpha 0.7").
+- **About** (top right): a dedicated room where the chief librarian teaches the whole idea from
+  ground zero (layers, neurons, α, up vs down, "Who are you?", the shelf), grounded in
+  [`docs/neuron_primer.md`](docs/neuron_primer.md). The teacher can be Qwen3-8B (default) or the
+  larger Ternary Bonsai 2 27B (chat-only) — [F00015](features/F00015_about_teach_room.md).
 
-It reproduces the single-neuron method of the
-[Neuron Persona Library](https://qwen-neurons-site.vercel.app/) and lets you stack
-several neurons at once.
+## Credits: Josh and the Neuron Persona Library
+
+This project exists because of **josh :)** ([@jfonsecarivera](https://x.com/jfonsecarivera)), who
+[posted](https://x.com/jfonsecarivera/status/2115109334090920065):
+
+> i made a library of 34,220 persona neurons in qwen please help me find the weirdest ones:
+> [qwen-neurons-site.vercel.app](https://qwen-neurons-site.vercel.app/)
+
+His **[Neuron Persona Library](https://qwen-neurons-site.vercel.app/)** pushed every one of
+Qwen3-8B's 442,368 MLP neurons, up and then down, asked "Who are you?", and mapped the 34,220
+replies (of 884,736) where the model said it was someone or something other than an AI. The
+steering recipe here — `h_L ← h_L + c·W_down[:,n]`, `c = ±α·r_L/‖W_down[:,n]‖`, α ∈ {1.25, 1.0,
+0.75, 0.5}, "Who are you?" with thinking off, greedy, 160 tokens — is his. He did it on the
+**8B** model, the same Qwen3-8B this lab runs locally, which is what made a home-Mac version
+possible. His atlas is the map; the Living Library is a place to walk around in it: probe
+neurons yourself, keep your own catalogue, and chat with the personas. Thank you, Josh.
 
 ## The model (not included)
 
@@ -190,6 +207,7 @@ color-coded in the box and in the chat). `/help` lists everything:
 | `/tabs` | who is checked out, and the last check-ins |
 | `/librarian [L:N:dir [--alpha X] \| NAME \| default]` | put a different neuron behind her desk, or restore L9 N367 down *(deferred: [F00006](features/F00006_change_librarian_persona.md)/[F00007](features/F00007_settings_librarian_neuron.md), untested)* |
 | `/export neurons` · `/export chats [md]` | download the active neurons + α (JSON, `who --json`-compatible) or every chat |
+| `/about [8b\|27b]` | the About room: learn how layers, neurons and α work (optionally pick the teacher) |
 | `/skin NAME` · `/settings` · `/reset` | Alexandria, Parchment, Midnight, Terminal, Marble · the settings drawer (top right) · clear this tab |
 
 Under every bubble: **Copy** (its text) and **Share**. A reply that hits the token limit carries on by
@@ -212,7 +230,20 @@ API (JSON; interactive docs at `/api/docs`):
 | `POST /api/reset` `{session_id}` | forget a conversation |
 | `POST /api/probe` `{layer, neuron, direction?=both, alpha?, force?, file?=true, persona?, tags?}` | probe "Who are you?" with that neuron **alone** and file the card |
 | `GET /api/inventory`, `/api/find?q=`, `/api/open?layer=&neuron=`, `/api/recent?k=` | catalogue reads (no model) |
-| `GET /api/health` | model ready?, steers |
+| `GET /api/health` | model ready?, steers, About-room default teacher |
+| `POST /api/about/stream` `{message, history?, model?: qwen3-8b\|bonsai-27b, continue_text?, voice_alpha?}` | F00015 About room: the librarian teaches from `docs/neuron_primer.md` (matching cards picked per turn); same SSE events; `done.cards` lists the primer cards used |
+| `GET /api/models` · `POST /api/models/start` · `POST /api/models/stop` | About-room teachers and their state; start/stop the Bonsai 27B `llama-server` on demand |
+
+**About room** ([F00015](features/F00015_about_teach_room.md)): the **About** button (top right) or
+`/about` opens a fixed tab where the chief librarian teaches the neuron process from ground zero. Each
+turn the server sends a teaching system prompt, a short key-facts block, and the
+[`docs/neuron_primer.md`](docs/neuron_primer.md) cards that match the question (RAG-lite: the core card
+plus the best keyword matches, ~1k words, so prefill stays quick). The **Teacher** picker in its header
+(and Settings → Models) switches between **Qwen3-8B** (default: her voice at a lighter push, L9 N367 down α 0.2, thinking on)
+and **Bonsai 27B** (unsteered, chat-only; *Start 27B* launches `llama-server`). `/about 27b` · `/about 8b`
+pick from the keyboard. Flags: `--about-model`, `--about-alpha` (her push while teaching, default 0.2, `0` = plain
+Qwen3-8B), `--about-max-tokens 600`, `--primer PATH`, `--bonsai-url`, `--bonsai-dir`. Edit the primer
+and the next question uses it, no restart needed.
 
 `--no-model` serves only the catalogue endpoints. All model work runs on one worker
 thread (MLX + steering hooks aren't thread-safe); chat state is `LibrarianSession`
@@ -222,6 +253,7 @@ in `librarian.py`, the same object the terminal REPL uses.
 
 - **MLX 4-bit (default for `librarian` / `serve`):** ~**4.6 GB**, comfortable on a **24 GB** Apple Silicon Mac. This is what we develop on (`mlx-community/Qwen3-8B-4bit`).
 - **Torch bf16 (`Qwen/Qwen3-8B`):** ~**16 GB** in the HF cache; a 24 GB Mac is tight if other apps are open. CUDA uses `device_map="auto"`. CPU works but is slow.
+- **Optional About-room teacher, Ternary Bonsai 2 27B** ([`prism-ml/Ternary-Bonsai-2-27B-gguf`](https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf), PQ2_0 ~**7.2 GB**): runs in Prism ML's llama.cpp build (`llama-server`, OpenAI-compatible) from a [Bonsai-demo](https://github.com/PrismML-Eng/Bonsai-demo) checkout (default `~/Source/repos/Ternary/Bonsai-demo`, `--bonsai-dir`; URL `--bonsai-url`, default `http://127.0.0.1:8080`). With the 8B loaded too, expect ~13–15 GB in use on a 24 GB Mac. It is **chat-only**: its packed ternary weights live in a rotated basis, so single MLP neurons can't be pushed — probes, personas and the librarian's voice always run on the 8B.
 
 
 ## Features index
@@ -244,6 +276,7 @@ One doc per feature under [`features/`](features/README.md) (verification stamps
 | [F00012](features/F00012_share_as_image.md) | Share selected chats as a PNG card | Verified |
 | [F00013](features/F00013_continue_cut_replies.md) | Continue token-limit / interrupted replies in a new bubble | Verified |
 | [F00014](features/F00014_lounge_mute_alpha.md) | The Lounge: everyone checked in at one table — on/off, reset, archive, mute, per-voice α; α kept on check-in | Verified |
+| [F00015](features/F00015_about_teach_room.md) | About room: the Librarian teaches layers / neurons / α from a primer; 8B or Bonsai 27B teacher; Josh credited | Verified |
 
 ## Caveats (also from the site)
 
