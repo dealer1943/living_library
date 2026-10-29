@@ -482,9 +482,9 @@ const memberAlpha = (m) => String(m.name || "").startsWith(`L${m.layer} N${m.neu
 function avatarHTML(t, cls) {   // a tab's avatar: the Librarian, one persona, a blend (split), or a group (stack)
   cls = cls || "av";
   if (!isPersona(t)) return `<span class="${cls} lib">L</span>`;
-  if (t.kind === "mix") return `<span class="${cls}" style="background:linear-gradient(135deg, ${palVar(0)} 50%, ${palVar(1)} 50%)">${esc(initial(t.name))}</span>`;
+  if (t.kind === "mix") return `<span class="${cls}" style="background:linear-gradient(135deg, ${palVar(0)} 50%, ${palVar(1)} 50%)">${esc(initial(dispName(t)))}</span>`;
   if (t.kind === "group") return `<span class="${cls} stack">${t.members.slice(0, 3).map((m, i) => `<i style="background:${palVar(i)}">${esc(initial(m.name))}</i>`).join("")}</span>`;
-  return `<span class="${cls}" style="background:${palVar(0)}">${esc(initial(t.name))}</span>`;
+  return `<span class="${cls}" style="background:${palVar(0)}">${esc(initial(dispName(t)))}</span>`;
 }
 
 function thoughtLabel(m) {
@@ -501,6 +501,16 @@ function setThoughts(el, thoughts, label, live) {
 }
 
 const librarianWho = () => prefs.voice ? `Librarian · ${prefs.voice.name}` : "Librarian";
+// Display name for a speaker in this tab: the tab's /name label replaces its own persona name in the UI only (F00010).
+const showWho = (t, who) => {
+  if (!who) return librarianWho();
+  if (t && isPersona(t) && t.label) {
+    const w = String(who).toLowerCase();
+    if (w === String(t.name).toLowerCase()) return t.label;
+    if (t.kind === "persona" && t.members.length === 1 && w === String(t.members[0].name || "").toLowerCase()) return t.label;
+  }
+  return who;
+};
 // mi: a persona's member index (its color); undefined = the Librarian
 function makeBubble(role, text, meta, thoughts, label, isCmd, who, mi) {
   const el = document.createElement("div");
@@ -528,7 +538,7 @@ const ICON_COPY = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" st
 const ICON_SHARE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg>`;
 const msgOf = new WeakMap();   // bubble element -> its stored message (F00011 / F00012)
 function msgBubble(m) {
-  const el = makeBubble(m.role, m.content, m.meta, m.thoughts, thoughtLabel(m), m.cmd, m.who, m.mi);
+  const el = makeBubble(m.role, m.content, m.meta, m.thoughts, thoughtLabel(m), m.cmd, m.who ? showWho(cur(), m.who) : m.who, m.mi);
   msgOf.set(el, m);
   if (picked.has(m)) el.classList.add("picked");
   if (m.role === "assistant" && (m.truncated || m.interrupted)) {   // F00013
@@ -560,8 +570,8 @@ function emptyState(t) {
   const who = t.members.map(m => esc(m.name)), labels = t.members.map(m => highlight(memberLabel(m), false)).join("<br>");
   const lead = t.kind === "group" ? `A group chat: you, ${who.slice(0, -1).join(", ")} and ${who[who.length - 1]} share one table — each answers in turn, and hears the others.`
              : t.kind === "mix" ? `One voice, blended: every neuron below is pushed at once.`
-             : `Everything you type here goes to ${who[0]} alone — the Librarian isn't listening.`;
-  return `<div class="empty persona-empty">${avatarHTML(t, "av big")}<h2>${esc(t.name)}</h2><p class="lbl">${labels}</p>
+             : `Everything you type here goes to ${esc(dispName(t))} alone — the Librarian isn't listening.`;
+  return `<div class="empty persona-empty">${avatarHTML(t, "av big")}<h2>${esc(dispName(t))}</h2><p class="lbl">${labels}</p>
       <p>${lead}</p><p>Say hello. When you're done, ${highlight("/checkin", true)} — or the <b>Check in</b> button above.</p></div>`;
 }
 function renderAll() {
@@ -602,7 +612,7 @@ function renderHeader() {
     $("steer").innerHTML = `${esc(model)} · ${t.kind === "group" ? `group of ${t.members.length} · ` : t.kind === "mix" ? "mix · " : ""}` +
       t.members.map(m => esc(memberLabel(m))).join(" + ");
     input.placeholder = t.kind === "group" ? `Message the table (${t.members.map(m => m.name).join(", ")})…   ( / for commands )`
-                                           : `Message ${t.name}…   ( / for commands )`;
+                                           : `Message ${dispName(t)}…   ( / for commands )`;
   } else {
     const extra = h ? (h.extra_steers || []).map(s => " + " + s.label).join("") : "";
     if (!editing) $("title").textContent = t.label || (prefs.voice ? `The Librarian · ${v.name}` : "The Librarian of Alexandria");
@@ -628,7 +638,7 @@ function drawLive(L) {
   if (L.tab !== tabs.active) return;
   if (!L.el || !L.el.isConnected) {
     const empty = log.querySelector(".empty"); if (empty) empty.remove();
-    L.el = makeBubble("assistant", "", "", "", "", false, L.who, L.mi); log.appendChild(L.el); toBottom();
+    L.el = makeBubble("assistant", "", "", "", "", false, L.who ? showWho(tab(L.tab) || cur(), L.who) : L.who, L.mi); log.appendChild(L.el); toBottom();
   }
   const tx = L.el.querySelector(".text");
   paint(tx, L.text, false); tx.classList.add("cursor");
@@ -1223,7 +1233,7 @@ function findTab(q) {
 function renameTab(t, label) {
   label = String(label || "").replace(/\s+/g, " ").trim().slice(0, 60);
   if (!label || label === baseName(t)) delete t.label; else t.label = label;
-  save(); renderTabs(); if (t.id === tabs.active) renderHeader();
+  save(); renderTabs(); if (t.id === tabs.active) { renderHeader(); renderAll(); }   // bubbles pick up the new label
 }
 function editName(host, t) {   // inline rename: Enter / blur saves, Esc cancels, empty restores the default
   if (!host || !t || host.querySelector(".rename-in")) return;
@@ -1423,7 +1433,7 @@ function shareCanvas(t, msgs, opt) {
     const cx = PAD + 22, cy = y + 30;
     ctx.fillStyle = persona ? C.neuron : C.accent; ctx.beginPath(); ctx.arc(cx, cy, 22, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = persona ? C.bg : C.accentInk; ctx.font = `600 21px ${SERIF}`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillText(persona ? initial(t.name) : "L", cx, cy + 1); ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+    ctx.fillText(persona ? initial(dispName(t)) : "L", cx, cy + 1); ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
     ctx.fillStyle = C.ink; ctx.font = `600 22px ${SERIF}`;
     const title = wrapLines(ctx, persona ? dispName(t) : (t.label || (prefs.voice ? `The Librarian · ${voice().name}` : "The Librarian of Alexandria")), CW - 60)[0];
     ctx.fillText(title, PAD + 58, y + 27);
@@ -1455,11 +1465,11 @@ function shareCanvas(t, msgs, opt) {
     const h = 20 + thH + bh + 16;
     return { h, draw(y) {
       ctx.font = `13px ${user ? SANS : SERIF}`; ctx.fillStyle = user ? C.muted : color; ctx.textAlign = user ? "right" : "left";
-      ctx.fillText(user ? "You" : (m.who || librarianWho()), user ? W - PAD : PAD + 40, y + 13); ctx.textAlign = "left";
+      ctx.fillText(user ? "You" : showWho(t, m.who || librarianWho()), user ? W - PAD : PAD + 40, y + 13); ctx.textAlign = "left";
       if (asst) {
         ctx.fillStyle = color; ctx.beginPath(); ctx.arc(PAD + 15, y + 34, 15, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = m.mi != null ? C.bg : C.accentInk; ctx.font = `600 14px ${SERIF}`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-        ctx.fillText(m.mi != null ? initial(m.who) : "L", PAD + 15, y + 35); ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+        ctx.fillText(m.mi != null ? initial(showWho(t, m.who)) : "L", PAD + 15, y + 35); ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
       }
       let ty = y + 20;
       if (thH) { ctx.strokeStyle = C.line; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(PAD + 42, ty); ctx.lineTo(PAD + 42, ty + thH - 8); ctx.stroke();

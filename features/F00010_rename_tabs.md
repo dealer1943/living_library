@@ -33,7 +33,9 @@ Inline edit: Enter or blur saves, Esc cancels. Re-renders while the input is ope
 - [x] `/name X` renames the active tab everywhere; persists across reload.
 - [x] ✎ / double-click in the sidebar and click on the header title rename inline.
 - [x] `/name reset` restores the default; the model still sees the original persona name.
+- [x] On a persona tab the label also drives the avatar letter (sidebar, empty state, share card), the bubble "who" line and avatar letter (stored and live), the empty-state heading/lead and the input placeholder (`showWho(t, who)`); existing bubbles re-render on rename. Model-facing names (`t.name`, member names, transcript speakers) are unchanged.
 
 ## Status log
 - 2026-10-28 — created from the owner's bug report.
 - 2026-10-28 18:04 — implemented and verified: headless Chrome over CDP (ll_uitest.mjs, 18/18 checks, 0 page errors).
+- 2026-10-28 22:10 — fix from owner's bug report ("the C conversation should be E espresso"): label now drives avatar initial, bubble who, share card, empty state and placeholder; model name unchanged. JS syntax-checked with `node --check`; not re-run in a browser.
